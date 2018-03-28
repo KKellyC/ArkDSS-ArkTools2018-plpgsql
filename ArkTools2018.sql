@@ -5,7 +5,7 @@
 -- Dumped from database version 9.3.20
 -- Dumped by pg_dump version 9.5.5
 
--- Started on 2018-03-26 08:30:36
+-- Started on 2018-03-27 20:43:12
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -74,7 +74,7 @@ CREATE EXTENSION IF NOT EXISTS plpgsql WITH SCHEMA pg_catalog;
 
 
 --
--- TOC entry 2551 (class 0 OID 0)
+-- TOC entry 2577 (class 0 OID 0)
 -- Dependencies: 1
 -- Name: EXTENSION plpgsql; Type: COMMENT; Schema: -; Owner: 
 --
@@ -85,7 +85,7 @@ COMMENT ON EXTENSION plpgsql IS 'PL/pgSQL procedural language';
 SET search_path = tools, pg_catalog;
 
 --
--- TOC entry 302 (class 1255 OID 25600)
+-- TOC entry 305 (class 1255 OID 25600)
 -- Name: fetchit_postsubmit_assoc_loc_to_water_colors_edit(); Type: FUNCTION; Schema: tools; Owner: ark_admin
 --
 
@@ -142,7 +142,130 @@ $$;
 ALTER FUNCTION tools.fetchit_postsubmit_assoc_loc_to_water_colors_edit() OWNER TO ark_admin;
 
 --
--- TOC entry 300 (class 1255 OID 25574)
+-- TOC entry 308 (class 1255 OID 25706)
+-- Name: fetchit_postsubmit_assoc_user_to_loc_triple_edit(); Type: FUNCTION; Schema: tools; Owner: ark_admin
+--
+
+CREATE FUNCTION fetchit_postsubmit_assoc_user_to_loc_triple_edit() RETURNS integer
+    LANGUAGE plpgsql
+    AS $$
+
+
+DECLARE
+
+BEGIN
+/* //////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	This function is called by the fetchit param form "Select Location(s) to Associate to Selected User"
+	allowing a user to select location(s) to associate to the selected user (and then move on to the 
+	user-to-water-color assoc to complete the triple 
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////// */
+
+---------
+--STEPS--
+---------
+
+/*1. Clear records in the assoc data table (data.assoc_user_to_loc) 
+     that already exist for the selected user (user_ndx)*/
+DELETE FROM data.assoc_user_to_loc d
+USING (SELECT DISTINCT user_ndx FROM tools.fetchit_landing_user_to_manage_last_submit) t
+ WHERE d.user_ndx = t.user_ndx;
+
+/*2. Insert records into the assoc data table (data.assoc_user_to_loc) 
+     from the fetchit landing table and with the cross joined user_ndx*/
+INSERT INTO data.assoc_user_to_loc(user_ndx, loc_ndx)
+SELECT user_ndx, loc_ndx
+ FROM tools.fetchit_landing_selected_loc_for_user_wc_triple_assoc
+CROSS JOIN (SELECT DISTINCT user_ndx FROM tools.fetchit_landing_user_to_manage_last_submit) t;
+
+/*3. Prep (clear) param form landing table (UNNECESSARY?) */
+DELETE FROM tools.fetchit_landing_selected_loc_for_user_wc_triple_assoc;
+
+/*4. Refresh egrid landing table based on user selected (UNNECESSARY?)*/
+INSERT INTO tools.fetchit_landing_selected_loc_for_user_wc_triple_assoc(loc_ndx)
+SELECT loc_ndx
+  FROM data.assoc_user_to_loc d
+  CROSS JOIN (SELECT DISTINCT user_ndx FROM tools.fetchit_landing_user_to_manage_last_submit) t
+WHERE d.user_ndx = t.user_ndx;
+
+/*5. Prep (clear) egrid landing table for next step: associating user to water types/colors */
+DELETE FROM tools.fetchit_landing_selected_wc_for_user_loc_triple_assoc;
+
+/*6. Refresh table display landing table for next step based on location(s) selected */
+INSERT INTO tools.fetchit_landing_selected_wc_for_user_loc_triple_assoc(wc_ndx)
+SELECT wc_ndx
+  FROM tools.table_display_build_assoc_triple_users_locs_wcs_prep
+WHERE assoc_true IS TRUE;
+
+RETURN 42;
+
+END
+$$;
+
+
+ALTER FUNCTION tools.fetchit_postsubmit_assoc_user_to_loc_triple_edit() OWNER TO ark_admin;
+
+--
+-- TOC entry 309 (class 1255 OID 25705)
+-- Name: fetchit_postsubmit_assoc_user_to_wc_triple_edit(); Type: FUNCTION; Schema: tools; Owner: ark_admin
+--
+
+CREATE FUNCTION fetchit_postsubmit_assoc_user_to_wc_triple_edit() RETURNS integer
+    LANGUAGE plpgsql
+    AS $$
+
+
+DECLARE
+
+BEGIN
+/* //////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	This function is called by the fetchit table display "Associate Selected User and Location(s) to Water Type(s)" 
+	allowing a user to edit the user water type (color) associations (with the locations triple in mind)
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////// */
+
+---------
+--STEPS--
+---------
+
+/*1. Clear records in the assoc data table (data.assoc_user_to_water_color) 
+     that already exist for the selected user (user_ndx)*/
+DELETE FROM data.assoc_user_to_water_color d
+USING (SELECT DISTINCT user_ndx FROM tools.table_display_build_assoc_triple_users_locs_wcs_prep) t
+ WHERE d.user_ndx = t.user_ndx;
+
+/*2. Insert records into the assoc data table (data.assoc_user_to_water_color) 
+     from the fetchit landing table */
+INSERT INTO data.assoc_user_to_water_color(user_ndx, wc_ndx)
+SELECT t.user_ndx, f.wc_ndx
+  FROM tools.fetchit_landing_selected_wc_for_user_loc_triple_assoc f
+CROSS JOIN (SELECT DISTINCT user_ndx FROM tools.table_display_build_assoc_triple_users_locs_wcs_prep) t;
+
+/*3. Prep (clear) egrid landing table */
+DELETE FROM tools.fetchit_landing_selected_wc_for_user_loc_triple_assoc;
+
+/*4. Refresh table display landing table based on location selected */
+INSERT INTO tools.fetchit_landing_selected_wc_for_user_loc_triple_assoc(wc_ndx)
+SELECT wc_ndx
+  FROM tools.table_display_build_assoc_triple_users_locs_wcs_prep
+WHERE assoc_true IS TRUE;
+
+RETURN 42;
+
+END
+$$;
+
+
+ALTER FUNCTION tools.fetchit_postsubmit_assoc_user_to_wc_triple_edit() OWNER TO ark_admin;
+
+--
+-- TOC entry 303 (class 1255 OID 25574)
 -- Name: fetchit_postsubmit_list_locations_add_new(); Type: FUNCTION; Schema: tools; Owner: ark_admin
 --
 
@@ -200,7 +323,7 @@ $$;
 ALTER FUNCTION tools.fetchit_postsubmit_list_locations_add_new() OWNER TO ark_admin;
 
 --
--- TOC entry 299 (class 1255 OID 25576)
+-- TOC entry 302 (class 1255 OID 25576)
 -- Name: fetchit_postsubmit_list_locations_edit_delete(); Type: FUNCTION; Schema: tools; Owner: ark_admin
 --
 
@@ -261,7 +384,7 @@ $$;
 ALTER FUNCTION tools.fetchit_postsubmit_list_locations_edit_delete() OWNER TO ark_admin;
 
 --
--- TOC entry 298 (class 1255 OID 25543)
+-- TOC entry 300 (class 1255 OID 25543)
 -- Name: fetchit_postsubmit_list_ownerentities_add_new(); Type: FUNCTION; Schema: tools; Owner: ark_admin
 --
 
@@ -319,7 +442,7 @@ $$;
 ALTER FUNCTION tools.fetchit_postsubmit_list_ownerentities_add_new() OWNER TO ark_admin;
 
 --
--- TOC entry 293 (class 1255 OID 25542)
+-- TOC entry 297 (class 1255 OID 25542)
 -- Name: fetchit_postsubmit_list_ownerentities_edit_delete(); Type: FUNCTION; Schema: tools; Owner: ark_admin
 --
 
@@ -380,7 +503,7 @@ $$;
 ALTER FUNCTION tools.fetchit_postsubmit_list_ownerentities_edit_delete() OWNER TO ark_admin;
 
 --
--- TOC entry 295 (class 1255 OID 25575)
+-- TOC entry 298 (class 1255 OID 25575)
 -- Name: fetchit_postsubmit_list_water_colors_add_new(); Type: FUNCTION; Schema: tools; Owner: ark_admin
 --
 
@@ -439,7 +562,7 @@ $$;
 ALTER FUNCTION tools.fetchit_postsubmit_list_water_colors_add_new() OWNER TO ark_admin;
 
 --
--- TOC entry 290 (class 1255 OID 25577)
+-- TOC entry 294 (class 1255 OID 25577)
 -- Name: fetchit_postsubmit_list_water_colors_edit_delete(); Type: FUNCTION; Schema: tools; Owner: ark_admin
 --
 
@@ -502,7 +625,7 @@ $$;
 ALTER FUNCTION tools.fetchit_postsubmit_list_water_colors_edit_delete() OWNER TO ark_admin;
 
 --
--- TOC entry 301 (class 1255 OID 25599)
+-- TOC entry 304 (class 1255 OID 25599)
 -- Name: fetchit_postsubmit_select_loc_for_wc_assoc(); Type: FUNCTION; Schema: tools; Owner: ark_admin
 --
 
@@ -545,7 +668,7 @@ $$;
 ALTER FUNCTION tools.fetchit_postsubmit_select_loc_for_wc_assoc() OWNER TO ark_admin;
 
 --
--- TOC entry 296 (class 1255 OID 25414)
+-- TOC entry 307 (class 1255 OID 25414)
 -- Name: fetchit_postsubmit_select_user_to_manage(); Type: FUNCTION; Schema: tools; Owner: ark_admin
 --
 
@@ -610,6 +733,16 @@ SELECT * FROM tools.egrid_build_assoc_users_and_entities;
 
 --** repeat above for the other two egrids, users to locs and users to water colors **
 
+/*3. Prep (clear) param form landing table for next step: selecting and associating location(s) to selected user */
+DELETE FROM tools.fetchit_landing_selected_loc_for_user_wc_triple_assoc;
+
+/*4. Refresh egrid landing table for next step based on user selected */
+INSERT INTO tools.fetchit_landing_selected_loc_for_user_wc_triple_assoc(loc_ndx)
+SELECT loc_ndx
+  FROM data.assoc_user_to_loc d
+  CROSS JOIN (SELECT DISTINCT user_ndx FROM tools.fetchit_landing_user_to_manage_last_submit) t
+WHERE d.user_ndx = t.user_ndx;
+
 END
 $$;
 
@@ -619,7 +752,7 @@ ALTER FUNCTION tools.fetchit_postsubmit_select_user_to_manage() OWNER TO ark_adm
 SET search_path = web, pg_catalog;
 
 --
--- TOC entry 297 (class 1255 OID 25516)
+-- TOC entry 301 (class 1255 OID 25516)
 -- Name: create_landing_table_record(integer, integer); Type: FUNCTION; Schema: web; Owner: ark_admin
 --
 
@@ -663,7 +796,7 @@ STEPS
 
 /* Check if a record is found for the current drupal user in form 1 table */
 SELECT d.drupal_userid into check_qry 
-FROM web.landing_form_1 d 
+FROM web.landing_form1 d 
 WHERE d.drupal_userid = userid;
 
 
@@ -677,10 +810,10 @@ If a record is not found, insert Drupal userid into form 1 table and user specif
 Else, do nothing
 */
 IF NOT FOUND then
-  EXECUTE 'INSERT INTO web.landing_form_1 (drupal_userid) VALUES($1)'
+  EXECUTE 'INSERT INTO web.landing_form1 (drupal_userid) VALUES($1)'
   USING userid;
 
-  SELECT landing_ndx INTO landing_ndx_qry FROM web.landing_form_1 WHERE drupal_userid = userid; 
+  SELECT landing_ndx INTO landing_ndx_qry FROM web.landing_form1 WHERE drupal_userid = userid; 
 
   EXECUTE 'INSERT INTO ' || table_name_qry || ' (landing_ndx, drupal_userid) VALUES($1,$2)'
   USING landing_ndx_qry, userid;
@@ -695,7 +828,7 @@ ELSE
   EXECUTE landing_table_check_qry INTO landing_table_check_result USING userid;
 
   IF landing_table_check_result IS NULL then
-	SELECT landing_ndx INTO landing_ndx_qry FROM web.landing_form_1 WHERE drupal_userid = userid;
+	SELECT landing_ndx INTO landing_ndx_qry FROM web.landing_form1 WHERE drupal_userid = userid;
 	EXECUTE 'INSERT INTO ' || table_name_qry || ' (landing_ndx, drupal_userid) VALUES($1,$2)'
 	USING landing_ndx_qry, userid; 
 	RETURN 'Records inserted into one landing table';
@@ -711,7 +844,200 @@ $_$;
 ALTER FUNCTION web.create_landing_table_record(userid integer, request_type integer) OWNER TO ark_admin;
 
 --
--- TOC entry 294 (class 1255 OID 25308)
+-- TOC entry 310 (class 1255 OID 25715)
+-- Name: postsubmit_request(integer); Type: FUNCTION; Schema: web; Owner: ark_admin
+--
+
+CREATE FUNCTION postsubmit_request(drupal_user integer) RETURNS integer
+    LANGUAGE plpgsql
+    AS $$
+
+
+DECLARE
+
+-------------------------------------------------------------------
+-- DEFINE Variables Used in Function
+-------------------------------------------------------------------
+-- General function variables
+qry text;
+request integer;
+
+default_record record;
+default_selection boolean;
+user_ndx integer;
+own_ndx integer;
+
+landing integer;
+req_type integer;
+
+BEGIN
+/* //////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////////
+
+	This function is the post-processing function for Form1 of the request form
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////// */
+
+---------
+--STEPS--
+---------
+
+
+/* 1. Create a new request record in data.requests (Landing From 1 records 
+   will always be new requests); Populate user_ndx,  own_ndx, req_type_ndx 
+   and additional_info from form1 landing table */
+
+qry := 'INSERT INTO data.data_requests(
+            req_type_ndx, req_status_ndx, user_ndx, own_ndx, additional_info)
+	SELECT req_type_ndx, 1, user_ndx, own_ndx_selected, additional_info
+	  FROM web.landing_form1 
+	  WHERE drupal_userid = ' || drupal_user || ';';
+EXECUTE (qry);
+
+/* Select and store req_ndx as variable */
+qry := 'SELECT max(req_ndx)
+	FROM data.data_requests;'; 
+FOR request IN EXECUTE (qry) LOOP
+END LOOP;
+
+/* 2. Create initial log record for this req_ndx in table data.data_requests_log, 
+   with event index 1 ("initial submit") and populate the log_timestamp with 
+   submit_timestamp from form1 landing table */
+
+qry := 'INSERT INTO data.data_requests_log(
+            req_ndx, log_timestamp, log_event_ndx)
+	SELECT ' || request || ', submit_timestamp, 1
+	  FROM web.landing_form1
+	  WHERE drupal_userid = ' || drupal_user || ';';
+EXECUTE (qry);
+
+/* 3. Create related record in data.data_requests_form1_content to capture 
+   the default_selection field, the submitting drupal user and the potentially 
+   modified user and entity info fields (to be processed later) */
+qry := 'INSERT INTO data.data_requests_form1_content(
+            req_ndx, default_selection, ownerentity_name, ownerentity_email, 
+            ownerentity_phone, user_entity, user_email, user_phone, drupal_userid)
+	SELECT ' || request || ', default_selection, ownerentity_name, ownerentity_email,
+	     ownerentity_phone, user_entity, user_email, user_phone, drupal_userid
+	  FROM web.landing_form1
+	  WHERE drupal_userid = ' || drupal_user || ';';
+EXECUTE (qry);
+
+/* 4. Process default_selection submitted to determine whether or not to 
+      change the default flag in the data.assoc_user_to_ownerentity table. 
+      If the default_selection is false, no need to process, but if it's true, 
+      update the default_user boolean in the data table to be true for the 
+      user_ndx/own_ndx association matching that of the submitted form and false
+      for any other associations with that user_ndx. */
+
+qry := 'SELECT default_selection, user_ndx, own_ndx_selected
+	FROM web.landing_form1
+	WHERE drupal_userid = ' || drupal_user || ';';
+FOR default_record IN EXECUTE (qry) 
+LOOP
+	default_selection = default_record.default_selection;
+	user_ndx = default_record.user_ndx;
+	own_ndx = default_record.own_ndx_selected; 
+
+	IF default_selection IS TRUE THEN 
+	
+		-- Set all associations false for this user_ndx 
+		qry := 'UPDATE data.assoc_user_to_ownerentity
+			SET default_user = FALSE
+			WHERE user_ndx = ' || user_ndx || ';';
+		EXECUTE (qry);
+
+		-- Set the new default user_ndx to owner_ndx association true
+		qry := 'UPDATE data.assoc_user_to_ownerentity
+			SET default_user = TRUE 
+			WHERE user_ndx = ' || user_ndx || ' 
+			   AND own_ndx = ' || own_ndx || ';';
+		EXECUTE (qry);	
+
+	ELSE
+	END IF;
+
+END LOOP;
+
+/* 5. Process ownerentity_name, ownerentity_email, ownerentity_phone, user_entity, 
+      user_email, and user_phone to determine if changes were submitted (compare to 
+      existing values for own_ndx_selected or user_ndx);  if changes were submitted, 
+      an alert email will be sent to div 2 with the info - system will not update 
+      the values of record automatically. */
+
+/* 6. Process other landing table(s), based on reqest type and contents of that form 
+      sumbmission for the same landing_ndx, creating records in other data tables with 
+      the same req_ndx as created in step 1 here. (see other landing table logic pages) */
+
+/* Select and store landing_ndx as variable */
+qry := 'SELECT landing_ndx
+	FROM  web.landing_form1
+        WHERE drupal_userid = ' || drupal_user || ';';
+FOR landing IN EXECUTE (qry) LOOP
+END LOOP;
+
+/* Select and store req_type_ndx as variable */
+qry := 'SELECT req_type_ndx
+	FROM  web.landing_form1
+        WHERE drupal_userid = ' || drupal_user || ';';
+FOR req_type IN EXECUTE (qry) LOOP
+END LOOP;
+
+IF req_type = 1 THEN 
+
+	/* //////////////////////////////////////////////////////////////
+		req_type_ndx = 1 -- RESERVOIR RELEASE
+	////////////////////////////////////////////////////////////// */
+
+	qry := 'INSERT INTO data.data_releases(
+		    req_ndx, start_timestamp, end_timestamp, fr_loc_ndx, deliv_loc_type_ndx, 
+		    fr_wc_ndx, rel_amount, units_ndx, additional_notes)
+		SELECT '|| request || ', 
+		release_start_date + release_start_time AS start_timestamp, 
+		(release_start_date + release_start_time) + (duration_days || ''days'')::interval AS end_timestamp, 
+		loc_ndx, deliv_loc_type_ndx, wc_ndx, release_amount::real, unit_ndx, additional_notes 
+		  FROM web.landing_request_reservoir
+		  WHERE drupal_userid = ' || drupal_user || ' AND landing_ndx = ' || landing || ';';
+	EXECUTE (qry);
+
+ELSIF req_type = 2 THEN
+
+	/* //////////////////////////////////////////////////////////////
+		req_type_ndx = 2 -- EXCHANGE
+	////////////////////////////////////////////////////////////// */
+
+ELSIF req_type = 3 THEN
+
+	/* //////////////////////////////////////////////////////////////
+		req_type_ndx = 3 -- RESERVOIR ACCOUNT TRANSFER
+	////////////////////////////////////////////////////////////// */
+
+ELSIF req_type = 4 THEN
+
+	/* //////////////////////////////////////////////////////////////
+		req_type_ndx = 4 -- UPSTREAM CAPTURE
+	////////////////////////////////////////////////////////////// */
+
+ELSIF req_type = 5 THEN
+
+	/* //////////////////////////////////////////////////////////////
+		req_type_ndx = 5 -- CANCELLATION
+	////////////////////////////////////////////////////////////// */
+
+ELSE
+END IF;
+
+RETURN 42;
+
+END
+$$;
+
+
+ALTER FUNCTION web.postsubmit_request(drupal_user integer) OWNER TO ark_admin;
+
+--
+-- TOC entry 299 (class 1255 OID 25308)
 -- Name: reset_form1(); Type: FUNCTION; Schema: web; Owner: ark_admin
 --
 
@@ -735,10 +1061,11 @@ BEGIN
 ///////////////////////////////////////////////////////////////////////////////////////////////// */
 	
 
-UPDATE web.landing_form_1
+UPDATE web.landing_form1
    SET user_ndx=null, own_ndx_selected=null, default_selection=null, 
        ownerentity_name=null, ownerentity_email=null, ownerentity_phone=null, 
-       additional_info=null, user_entity=null, user_email=null, user_phone=null;
+       additional_info=null, user_entity=null, user_email=null, user_phone=null,
+       req_type_ndx=null;
 
 RETURN 'Records Cleared';
 END
@@ -748,7 +1075,7 @@ $$;
 ALTER FUNCTION web.reset_form1() OWNER TO ark_admin;
 
 --
--- TOC entry 303 (class 1255 OID 25636)
+-- TOC entry 306 (class 1255 OID 25636)
 -- Name: update_exchange_records(integer, json, text); Type: FUNCTION; Schema: web; Owner: ark_admin
 --
 
@@ -863,7 +1190,7 @@ $_$;
 ALTER FUNCTION web.update_exchange_records(userid integer, records json, recordtype text) OWNER TO ark_admin;
 
 --
--- TOC entry 292 (class 1255 OID 25257)
+-- TOC entry 296 (class 1255 OID 25257)
 -- Name: update_form1_records(integer, json); Type: FUNCTION; Schema: web; Owner: ark_admin
 --
 
@@ -895,12 +1222,12 @@ STEPS
 
 ================================================================================================= */
 
-EXECUTE 'DELETE FROM web.landing_form_1_json WHERE drupal_userid = $1'
+EXECUTE 'DELETE FROM web.landing_form1_json WHERE drupal_userid = $1'
 USING userid;
-EXECUTE 'INSERT INTO web.landing_form_1_json (json_obj,drupal_userid) VALUES ($1,$2)'
+EXECUTE 'INSERT INTO web.landing_form1_json (json_obj,drupal_userid) VALUES ($1,$2)'
 USING records,userid;
 
-UPDATE web.landing_form_1 l SET user_ndx = j.user_ndx, own_ndx_selected = j.own_ndx_selected, default_selection = j.default_selection,  ownerentity_name = j.ownerentity_name, ownerentity_email = j.ownerentity_email, ownerentity_phone = j.ownerentity_phone, additional_info = j.additional_info, user_entity = j.user_entity, user_email = j.user_email, user_phone = j.user_phone, drupal_userid = j.drupal_userid FROM (
+UPDATE web.landing_form1 l SET user_ndx = j.user_ndx, own_ndx_selected = j.own_ndx_selected, default_selection = j.default_selection,  ownerentity_name = j.ownerentity_name, ownerentity_email = j.ownerentity_email, ownerentity_phone = j.ownerentity_phone, additional_info = j.additional_info, user_entity = j.user_entity, user_email = j.user_email, user_phone = j.user_phone, drupal_userid = j.drupal_userid, req_type_ndx = j.req_type_ndx FROM (
 SELECT  (j.json_obj ->> 'user_ndx')::integer AS user_ndx,
 	(j.json_obj ->> 'own_ndx_selected')::integer AS own_ndx_selected,
 	(j.json_obj ->> 'default_selection')::boolean AS default_selection,
@@ -911,8 +1238,9 @@ SELECT  (j.json_obj ->> 'user_ndx')::integer AS user_ndx,
 	j.json_obj ->> 'user_entity' AS user_entity,
 	j.json_obj ->> 'user_email' AS user_email,
 	j.json_obj ->> 'user_phone' AS user_phone,
-	(j.json_obj ->> 'drupal_userid')::integer AS drupal_userid
-FROM web.landing_form_1_json j
+	(j.json_obj ->> 'drupal_userid')::integer AS drupal_userid,
+	(j.json_obj ->> 'req_type_ndx')::integer AS req_type_ndx
+FROM web.landing_form1_json j
 WHERE (j.json_obj ->> 'drupal_userid')::integer = userid ) j
 WHERE l.drupal_userid = j.drupal_userid::integer;
 
@@ -924,7 +1252,7 @@ $_$;
 ALTER FUNCTION web.update_form1_records(userid integer, records json) OWNER TO ark_admin;
 
 --
--- TOC entry 291 (class 1255 OID 25415)
+-- TOC entry 295 (class 1255 OID 25415)
 -- Name: update_res_release_records(integer, json); Type: FUNCTION; Schema: web; Owner: ark_admin
 --
 
@@ -1023,7 +1351,7 @@ CREATE TABLE landing_request_reservoir_log (
 ALTER TABLE landing_request_reservoir_log OWNER TO ark_admin;
 
 --
--- TOC entry 2552 (class 0 OID 0)
+-- TOC entry 2578 (class 0 OID 0)
 -- Dependencies: 228
 -- Name: TABLE landing_request_reservoir_log; Type: COMMENT; Schema: archive; Owner: ark_admin
 --
@@ -1032,7 +1360,7 @@ COMMENT ON TABLE landing_request_reservoir_log IS 'Accumulated raw landing table
 
 
 --
--- TOC entry 2553 (class 0 OID 0)
+-- TOC entry 2579 (class 0 OID 0)
 -- Dependencies: 228
 -- Name: COLUMN landing_request_reservoir_log.landing_ndx; Type: COMMENT; Schema: archive; Owner: ark_admin
 --
@@ -1041,7 +1369,7 @@ COMMENT ON COLUMN landing_request_reservoir_log.landing_ndx IS 'auto generating 
 
 
 --
--- TOC entry 2554 (class 0 OID 0)
+-- TOC entry 2580 (class 0 OID 0)
 -- Dependencies: 228
 -- Name: COLUMN landing_request_reservoir_log.user_ndx; Type: COMMENT; Schema: archive; Owner: ark_admin
 --
@@ -1050,7 +1378,7 @@ COMMENT ON COLUMN landing_request_reservoir_log.user_ndx IS 'index for system us
 
 
 --
--- TOC entry 2555 (class 0 OID 0)
+-- TOC entry 2581 (class 0 OID 0)
 -- Dependencies: 228
 -- Name: COLUMN landing_request_reservoir_log.own_ndx_selected; Type: COMMENT; Schema: archive; Owner: ark_admin
 --
@@ -1059,7 +1387,7 @@ COMMENT ON COLUMN landing_request_reservoir_log.own_ndx_selected IS 'index for o
 
 
 --
--- TOC entry 2556 (class 0 OID 0)
+-- TOC entry 2582 (class 0 OID 0)
 -- Dependencies: 228
 -- Name: COLUMN landing_request_reservoir_log.default_selection; Type: COMMENT; Schema: archive; Owner: ark_admin
 --
@@ -1068,7 +1396,7 @@ COMMENT ON COLUMN landing_request_reservoir_log.default_selection IS 'check-box 
 
 
 --
--- TOC entry 2557 (class 0 OID 0)
+-- TOC entry 2583 (class 0 OID 0)
 -- Dependencies: 228
 -- Name: COLUMN landing_request_reservoir_log.ownerentity_name; Type: COMMENT; Schema: archive; Owner: ark_admin
 --
@@ -1077,7 +1405,7 @@ COMMENT ON COLUMN landing_request_reservoir_log.ownerentity_name IS 'name for th
 
 
 --
--- TOC entry 2558 (class 0 OID 0)
+-- TOC entry 2584 (class 0 OID 0)
 -- Dependencies: 228
 -- Name: COLUMN landing_request_reservoir_log.ownerentity_email; Type: COMMENT; Schema: archive; Owner: ark_admin
 --
@@ -1086,7 +1414,7 @@ COMMENT ON COLUMN landing_request_reservoir_log.ownerentity_email IS 'email addr
 
 
 --
--- TOC entry 2559 (class 0 OID 0)
+-- TOC entry 2585 (class 0 OID 0)
 -- Dependencies: 228
 -- Name: COLUMN landing_request_reservoir_log.ownerentity_phone; Type: COMMENT; Schema: archive; Owner: ark_admin
 --
@@ -1095,7 +1423,7 @@ COMMENT ON COLUMN landing_request_reservoir_log.ownerentity_phone IS 'phone numb
 
 
 --
--- TOC entry 2560 (class 0 OID 0)
+-- TOC entry 2586 (class 0 OID 0)
 -- Dependencies: 228
 -- Name: COLUMN landing_request_reservoir_log.additional_info; Type: COMMENT; Schema: archive; Owner: ark_admin
 --
@@ -1104,7 +1432,7 @@ COMMENT ON COLUMN landing_request_reservoir_log.additional_info IS 'additional i
 
 
 --
--- TOC entry 2561 (class 0 OID 0)
+-- TOC entry 2587 (class 0 OID 0)
 -- Dependencies: 228
 -- Name: COLUMN landing_request_reservoir_log.user_entity; Type: COMMENT; Schema: archive; Owner: ark_admin
 --
@@ -1113,7 +1441,7 @@ COMMENT ON COLUMN landing_request_reservoir_log.user_entity IS 'ownerentity name
 
 
 --
--- TOC entry 2562 (class 0 OID 0)
+-- TOC entry 2588 (class 0 OID 0)
 -- Dependencies: 228
 -- Name: COLUMN landing_request_reservoir_log.user_email; Type: COMMENT; Schema: archive; Owner: ark_admin
 --
@@ -1122,7 +1450,7 @@ COMMENT ON COLUMN landing_request_reservoir_log.user_email IS 'email address ass
 
 
 --
--- TOC entry 2563 (class 0 OID 0)
+-- TOC entry 2589 (class 0 OID 0)
 -- Dependencies: 228
 -- Name: COLUMN landing_request_reservoir_log.user_phone; Type: COMMENT; Schema: archive; Owner: ark_admin
 --
@@ -1131,7 +1459,7 @@ COMMENT ON COLUMN landing_request_reservoir_log.user_phone IS 'primary contact p
 
 
 --
--- TOC entry 2564 (class 0 OID 0)
+-- TOC entry 2590 (class 0 OID 0)
 -- Dependencies: 228
 -- Name: COLUMN landing_request_reservoir_log.loc_ndx; Type: COMMENT; Schema: archive; Owner: ark_admin
 --
@@ -1140,7 +1468,7 @@ COMMENT ON COLUMN landing_request_reservoir_log.loc_ndx IS 'Selected release fro
 
 
 --
--- TOC entry 2565 (class 0 OID 0)
+-- TOC entry 2591 (class 0 OID 0)
 -- Dependencies: 228
 -- Name: COLUMN landing_request_reservoir_log.release_start_date; Type: COMMENT; Schema: archive; Owner: ark_admin
 --
@@ -1149,7 +1477,7 @@ COMMENT ON COLUMN landing_request_reservoir_log.release_start_date IS 'Specified
 
 
 --
--- TOC entry 2566 (class 0 OID 0)
+-- TOC entry 2592 (class 0 OID 0)
 -- Dependencies: 228
 -- Name: COLUMN landing_request_reservoir_log.release_start_time; Type: COMMENT; Schema: archive; Owner: ark_admin
 --
@@ -1158,7 +1486,7 @@ COMMENT ON COLUMN landing_request_reservoir_log.release_start_time IS 'requested
 
 
 --
--- TOC entry 2567 (class 0 OID 0)
+-- TOC entry 2593 (class 0 OID 0)
 -- Dependencies: 228
 -- Name: COLUMN landing_request_reservoir_log.deliv_loc_type_ndx; Type: COMMENT; Schema: archive; Owner: ark_admin
 --
@@ -1167,7 +1495,7 @@ COMMENT ON COLUMN landing_request_reservoir_log.deliv_loc_type_ndx IS 'Delivery 
 
 
 --
--- TOC entry 2568 (class 0 OID 0)
+-- TOC entry 2594 (class 0 OID 0)
 -- Dependencies: 228
 -- Name: COLUMN landing_request_reservoir_log.release_amount; Type: COMMENT; Schema: archive; Owner: ark_admin
 --
@@ -1176,7 +1504,7 @@ COMMENT ON COLUMN landing_request_reservoir_log.release_amount IS 'Requested rel
 
 
 --
--- TOC entry 2569 (class 0 OID 0)
+-- TOC entry 2595 (class 0 OID 0)
 -- Dependencies: 228
 -- Name: COLUMN landing_request_reservoir_log.unit_ndx; Type: COMMENT; Schema: archive; Owner: ark_admin
 --
@@ -1185,7 +1513,7 @@ COMMENT ON COLUMN landing_request_reservoir_log.unit_ndx IS 'Selected units for 
 
 
 --
--- TOC entry 2570 (class 0 OID 0)
+-- TOC entry 2596 (class 0 OID 0)
 -- Dependencies: 228
 -- Name: COLUMN landing_request_reservoir_log.duration_days; Type: COMMENT; Schema: archive; Owner: ark_admin
 --
@@ -1194,7 +1522,7 @@ COMMENT ON COLUMN landing_request_reservoir_log.duration_days IS 'release durati
 
 
 --
--- TOC entry 2571 (class 0 OID 0)
+-- TOC entry 2597 (class 0 OID 0)
 -- Dependencies: 228
 -- Name: COLUMN landing_request_reservoir_log.wc_ndx; Type: COMMENT; Schema: archive; Owner: ark_admin
 --
@@ -1203,7 +1531,7 @@ COMMENT ON COLUMN landing_request_reservoir_log.wc_ndx IS 'Selected Water Color 
 
 
 --
--- TOC entry 2572 (class 0 OID 0)
+-- TOC entry 2598 (class 0 OID 0)
 -- Dependencies: 228
 -- Name: COLUMN landing_request_reservoir_log.additional_notes; Type: COMMENT; Schema: archive; Owner: ark_admin
 --
@@ -1212,7 +1540,7 @@ COMMENT ON COLUMN landing_request_reservoir_log.additional_notes IS 'Additional 
 
 
 --
--- TOC entry 2573 (class 0 OID 0)
+-- TOC entry 2599 (class 0 OID 0)
 -- Dependencies: 228
 -- Name: COLUMN landing_request_reservoir_log.drupal_userid; Type: COMMENT; Schema: archive; Owner: ark_admin
 --
@@ -1263,7 +1591,7 @@ CREATE SEQUENCE assoc_diversion_classes_dc_ndx_seq
 ALTER TABLE assoc_diversion_classes_dc_ndx_seq OWNER TO ark_admin;
 
 --
--- TOC entry 2574 (class 0 OID 0)
+-- TOC entry 2600 (class 0 OID 0)
 -- Dependencies: 220
 -- Name: assoc_diversion_classes_dc_ndx_seq; Type: SEQUENCE OWNED BY; Schema: data; Owner: ark_admin
 --
@@ -1378,7 +1706,7 @@ CREATE SEQUENCE data_assoc_exch_from_exch_fr_ndx_seq
 ALTER TABLE data_assoc_exch_from_exch_fr_ndx_seq OWNER TO ark_admin;
 
 --
--- TOC entry 2577 (class 0 OID 0)
+-- TOC entry 2605 (class 0 OID 0)
 -- Dependencies: 205
 -- Name: data_assoc_exch_from_exch_fr_ndx_seq; Type: SEQUENCE OWNED BY; Schema: data; Owner: ark_admin
 --
@@ -1419,7 +1747,7 @@ CREATE SEQUENCE data_assoc_exch_to_exch_to_ndx_seq
 ALTER TABLE data_assoc_exch_to_exch_to_ndx_seq OWNER TO ark_admin;
 
 --
--- TOC entry 2578 (class 0 OID 0)
+-- TOC entry 2606 (class 0 OID 0)
 -- Dependencies: 203
 -- Name: data_assoc_exch_to_exch_to_ndx_seq; Type: SEQUENCE OWNED BY; Schema: data; Owner: ark_admin
 --
@@ -1460,7 +1788,7 @@ CREATE SEQUENCE data_assoc_transfers_to_tran_to_ndx_seq
 ALTER TABLE data_assoc_transfers_to_tran_to_ndx_seq OWNER TO ark_admin;
 
 --
--- TOC entry 2579 (class 0 OID 0)
+-- TOC entry 2607 (class 0 OID 0)
 -- Dependencies: 212
 -- Name: data_assoc_transfers_to_tran_to_ndx_seq; Type: SEQUENCE OWNED BY; Schema: data; Owner: ark_admin
 --
@@ -1528,13 +1856,14 @@ ALTER TABLE data_rel_modified_log OWNER TO ark_admin;
 
 CREATE TABLE data_releases (
     req_ndx integer NOT NULL,
-    start_datetime timestamp without time zone NOT NULL,
-    end_datetime timestamp without time zone NOT NULL,
+    start_timestamp timestamp without time zone NOT NULL,
+    end_timestamp timestamp without time zone NOT NULL,
     fr_loc_ndx integer NOT NULL,
     deliv_loc_type_ndx integer NOT NULL,
     fr_wc_ndx integer NOT NULL,
     rel_amount real NOT NULL,
-    units_ndx integer NOT NULL
+    units_ndx integer NOT NULL,
+    additional_notes text
 );
 
 
@@ -1549,16 +1878,33 @@ CREATE TABLE data_requests (
     req_ndx integer NOT NULL,
     req_type_ndx integer,
     req_status_ndx integer,
-    submit_datetime timestamp without time zone,
-    reviewed_datetime timestamp without time zone,
-    cancelled_datetime timestamp without time zone,
-    modified_datetime timestamp without time zone,
     user_ndx integer,
-    own_ndx integer
+    own_ndx integer,
+    additional_info text
 );
 
 
 ALTER TABLE data_requests OWNER TO ark_admin;
+
+--
+-- TOC entry 277 (class 1259 OID 25661)
+-- Name: data_requests_form1_content; Type: TABLE; Schema: data; Owner: ark_admin
+--
+
+CREATE TABLE data_requests_form1_content (
+    req_ndx integer NOT NULL,
+    default_selection boolean,
+    ownerentity_name text,
+    ownerentity_email text,
+    ownerentity_phone text,
+    user_entity text,
+    user_email text,
+    user_phone text,
+    drupal_userid integer
+);
+
+
+ALTER TABLE data_requests_form1_content OWNER TO ark_admin;
 
 --
 -- TOC entry 200 (class 1259 OID 16573)
@@ -1568,7 +1914,7 @@ ALTER TABLE data_requests OWNER TO ark_admin;
 CREATE TABLE data_requests_log (
     req_ndx integer,
     log_req_ndx integer NOT NULL,
-    log_datetime timestamp without time zone,
+    log_timestamp timestamp without time zone,
     log_event_ndx integer,
     log_notes text
 );
@@ -1592,7 +1938,7 @@ CREATE SEQUENCE data_requests_log_log_req_ndx_seq
 ALTER TABLE data_requests_log_log_req_ndx_seq OWNER TO ark_admin;
 
 --
--- TOC entry 2580 (class 0 OID 0)
+-- TOC entry 2608 (class 0 OID 0)
 -- Dependencies: 199
 -- Name: data_requests_log_log_req_ndx_seq; Type: SEQUENCE OWNED BY; Schema: data; Owner: ark_admin
 --
@@ -1616,7 +1962,7 @@ CREATE SEQUENCE data_requests_req_ndx_seq
 ALTER TABLE data_requests_req_ndx_seq OWNER TO ark_admin;
 
 --
--- TOC entry 2581 (class 0 OID 0)
+-- TOC entry 2609 (class 0 OID 0)
 -- Dependencies: 207
 -- Name: data_requests_req_ndx_seq; Type: SEQUENCE OWNED BY; Schema: data; Owner: ark_admin
 --
@@ -1689,7 +2035,7 @@ CREATE SEQUENCE list_cancelled_by_cancel_by_ndx_seq
 ALTER TABLE list_cancelled_by_cancel_by_ndx_seq OWNER TO ark_admin;
 
 --
--- TOC entry 2582 (class 0 OID 0)
+-- TOC entry 2610 (class 0 OID 0)
 -- Dependencies: 218
 -- Name: list_cancelled_by_cancel_by_ndx_seq; Type: SEQUENCE OWNED BY; Schema: data; Owner: ark_admin
 --
@@ -1726,7 +2072,7 @@ CREATE SEQUENCE list_cancelled_reasons_cancel_reason_ndx_seq
 ALTER TABLE list_cancelled_reasons_cancel_reason_ndx_seq OWNER TO ark_admin;
 
 --
--- TOC entry 2583 (class 0 OID 0)
+-- TOC entry 2611 (class 0 OID 0)
 -- Dependencies: 216
 -- Name: list_cancelled_reasons_cancel_reason_ndx_seq; Type: SEQUENCE OWNED BY; Schema: data; Owner: ark_admin
 --
@@ -1767,7 +2113,7 @@ CREATE SEQUENCE list_delivery_loc_types_deliv_loc_type_ndx_seq
 ALTER TABLE list_delivery_loc_types_deliv_loc_type_ndx_seq OWNER TO ark_admin;
 
 --
--- TOC entry 2584 (class 0 OID 0)
+-- TOC entry 2612 (class 0 OID 0)
 -- Dependencies: 190
 -- Name: list_delivery_loc_types_deliv_loc_type_ndx_seq; Type: SEQUENCE OWNED BY; Schema: data; Owner: ark_admin
 --
@@ -1828,7 +2174,7 @@ CREATE SEQUENCE list_locations_loc_ndx_seq
 ALTER TABLE list_locations_loc_ndx_seq OWNER TO ark_admin;
 
 --
--- TOC entry 2586 (class 0 OID 0)
+-- TOC entry 2614 (class 0 OID 0)
 -- Dependencies: 178
 -- Name: list_locations_loc_ndx_seq; Type: SEQUENCE OWNED BY; Schema: data; Owner: ark_admin
 --
@@ -1865,7 +2211,7 @@ CREATE SEQUENCE list_log_events_log_event_ndx_seq
 ALTER TABLE list_log_events_log_event_ndx_seq OWNER TO ark_admin;
 
 --
--- TOC entry 2588 (class 0 OID 0)
+-- TOC entry 2616 (class 0 OID 0)
 -- Dependencies: 188
 -- Name: list_log_events_log_event_ndx_seq; Type: SEQUENCE OWNED BY; Schema: data; Owner: ark_admin
 --
@@ -1907,7 +2253,7 @@ CREATE SEQUENCE list_ownerentities_own_ndx_seq
 ALTER TABLE list_ownerentities_own_ndx_seq OWNER TO ark_admin;
 
 --
--- TOC entry 2590 (class 0 OID 0)
+-- TOC entry 2618 (class 0 OID 0)
 -- Dependencies: 180
 -- Name: list_ownerentities_own_ndx_seq; Type: SEQUENCE OWNED BY; Schema: data; Owner: ark_admin
 --
@@ -1945,7 +2291,7 @@ CREATE SEQUENCE list_request_landing_tables_landing_table_ndx_seq
 ALTER TABLE list_request_landing_tables_landing_table_ndx_seq OWNER TO ark_admin;
 
 --
--- TOC entry 2592 (class 0 OID 0)
+-- TOC entry 2620 (class 0 OID 0)
 -- Dependencies: 257
 -- Name: list_request_landing_tables_landing_table_ndx_seq; Type: SEQUENCE OWNED BY; Schema: data; Owner: ark_admin
 --
@@ -1982,7 +2328,7 @@ CREATE SEQUENCE list_request_status_req_status_ndx_seq
 ALTER TABLE list_request_status_req_status_ndx_seq OWNER TO ark_admin;
 
 --
--- TOC entry 2593 (class 0 OID 0)
+-- TOC entry 2621 (class 0 OID 0)
 -- Dependencies: 184
 -- Name: list_request_status_req_status_ndx_seq; Type: SEQUENCE OWNED BY; Schema: data; Owner: ark_admin
 --
@@ -2021,7 +2367,7 @@ CREATE SEQUENCE list_requests_types_req_type_ndx_seq
 ALTER TABLE list_requests_types_req_type_ndx_seq OWNER TO ark_admin;
 
 --
--- TOC entry 2594 (class 0 OID 0)
+-- TOC entry 2622 (class 0 OID 0)
 -- Dependencies: 192
 -- Name: list_requests_types_req_type_ndx_seq; Type: SEQUENCE OWNED BY; Schema: data; Owner: ark_admin
 --
@@ -2059,7 +2405,7 @@ CREATE SEQUENCE list_units_unit_ndx_seq
 ALTER TABLE list_units_unit_ndx_seq OWNER TO ark_admin;
 
 --
--- TOC entry 2595 (class 0 OID 0)
+-- TOC entry 2623 (class 0 OID 0)
 -- Dependencies: 194
 -- Name: list_units_unit_ndx_seq; Type: SEQUENCE OWNED BY; Schema: data; Owner: ark_admin
 --
@@ -2101,7 +2447,7 @@ CREATE SEQUENCE list_user_user_ndx_seq
 ALTER TABLE list_user_user_ndx_seq OWNER TO ark_admin;
 
 --
--- TOC entry 2597 (class 0 OID 0)
+-- TOC entry 2625 (class 0 OID 0)
 -- Dependencies: 176
 -- Name: list_user_user_ndx_seq; Type: SEQUENCE OWNED BY; Schema: data; Owner: ark_admin
 --
@@ -2146,7 +2492,7 @@ CREATE SEQUENCE list_water_colors_wc_ndx_seq
 ALTER TABLE list_water_colors_wc_ndx_seq OWNER TO ark_admin;
 
 --
--- TOC entry 2599 (class 0 OID 0)
+-- TOC entry 2627 (class 0 OID 0)
 -- Dependencies: 186
 -- Name: list_water_colors_wc_ndx_seq; Type: SEQUENCE OWNED BY; Schema: data; Owner: ark_admin
 --
@@ -2183,7 +2529,7 @@ CREATE SEQUENCE list_wc_calc_types_calc_type_ndx_seq
 ALTER TABLE list_wc_calc_types_calc_type_ndx_seq OWNER TO ark_admin;
 
 --
--- TOC entry 2601 (class 0 OID 0)
+-- TOC entry 2629 (class 0 OID 0)
 -- Dependencies: 182
 -- Name: list_wc_calc_types_calc_type_ndx_seq; Type: SEQUENCE OWNED BY; Schema: data; Owner: ark_admin
 --
@@ -2355,6 +2701,22 @@ CREATE TABLE egrid_assoc_locations_and_water_colors (
 ALTER TABLE egrid_assoc_locations_and_water_colors OWNER TO ark_admin;
 
 --
+-- TOC entry 278 (class 1259 OID 25678)
+-- Name: egrid_assoc_triple_users_locs_wcs; Type: TABLE; Schema: tools; Owner: ark_admin
+--
+
+CREATE TABLE egrid_assoc_triple_users_locs_wcs (
+    user_ndx integer,
+    loc_name text,
+    wc_ndx integer,
+    wc_name text,
+    assoc_true boolean
+);
+
+
+ALTER TABLE egrid_assoc_triple_users_locs_wcs OWNER TO ark_admin;
+
+--
 -- TOC entry 272 (class 1259 OID 25606)
 -- Name: egrid_assoc_users_and_entities; Type: TABLE; Schema: tools; Owner: ark_admin
 --
@@ -2469,42 +2831,6 @@ CREATE VIEW fetchit_landing_user_to_manage_last_submit AS
 
 
 ALTER TABLE fetchit_landing_user_to_manage_last_submit OWNER TO ark_admin;
-
---
--- TOC entry 277 (class 1259 OID 25650)
--- Name: egrid_build_assoc_triple_users_locs_wcs; Type: VIEW; Schema: tools; Owner: ark_admin
---
-
-CREATE VIEW egrid_build_assoc_triple_users_locs_wcs AS
- SELECT u.user_ndx,
-    lwc.wc_ndx,
-    uwc.wc_ndx AS assoc_wc_ndx,
-    wc.wc_name,
-    string_agg((ul.loc_ndx)::text, ', '::text ORDER BY l.loc_name) AS loc_ndx,
-    string_agg(l.loc_name, ', '::text ORDER BY l.loc_name) AS loc_name,
-        CASE
-            WHEN (uwc.wc_ndx IS NOT NULL) THEN true
-            ELSE false
-        END AS assoc_true
-   FROM (((((fetchit_landing_user_to_manage_last_submit u
-     JOIN data.assoc_user_to_loc ul USING (user_ndx))
-     JOIN data.assoc_loc_to_water_colors lwc USING (loc_ndx))
-     JOIN data.list_locations l USING (loc_ndx))
-     JOIN data.list_water_colors wc ON ((wc.wc_ndx = lwc.wc_ndx)))
-     LEFT JOIN data.assoc_user_to_water_color uwc ON (((uwc.wc_ndx = lwc.wc_ndx) AND (uwc.user_ndx = u.user_ndx))))
-  GROUP BY u.user_ndx, lwc.wc_ndx, uwc.wc_ndx, wc.wc_name,
-        CASE
-            WHEN (uwc.wc_ndx IS NOT NULL) THEN true
-            ELSE false
-        END
-  ORDER BY
-        CASE
-            WHEN (uwc.wc_ndx IS NOT NULL) THEN true
-            ELSE false
-        END DESC, wc.wc_name;
-
-
-ALTER TABLE egrid_build_assoc_triple_users_locs_wcs OWNER TO ark_admin;
 
 --
 -- TOC entry 271 (class 1259 OID 25601)
@@ -2666,6 +2992,72 @@ CREATE TABLE fetchit_landing_selected_loc_for_user_wc_triple_assoc (
 
 ALTER TABLE fetchit_landing_selected_loc_for_user_wc_triple_assoc OWNER TO ark_admin;
 
+--
+-- TOC entry 280 (class 1259 OID 25698)
+-- Name: fetchit_landing_selected_wc_for_user_loc_triple_assoc; Type: TABLE; Schema: tools; Owner: ark_admin
+--
+
+CREATE TABLE fetchit_landing_selected_wc_for_user_loc_triple_assoc (
+    wc_ndx integer
+);
+
+
+ALTER TABLE fetchit_landing_selected_wc_for_user_loc_triple_assoc OWNER TO ark_admin;
+
+--
+-- TOC entry 279 (class 1259 OID 25689)
+-- Name: table_display_build_assoc_triple_users_locs_wcs_prep; Type: VIEW; Schema: tools; Owner: ark_admin
+--
+
+CREATE VIEW table_display_build_assoc_triple_users_locs_wcs_prep AS
+ SELECT f.user_ndx,
+    u.user_name,
+    string_agg((ul.loc_ndx)::text, ', '::text ORDER BY l.loc_name) AS loc_ndx,
+    string_agg(l.loc_name, ', '::text ORDER BY l.loc_name) AS loc_name,
+    lwc.wc_ndx,
+    uwc.wc_ndx AS assoc_wc_ndx,
+    wc.wc_name,
+        CASE
+            WHEN (uwc.wc_ndx IS NOT NULL) THEN true
+            ELSE false
+        END AS assoc_true
+   FROM ((((((fetchit_landing_user_to_manage_last_submit f
+     JOIN data.list_users u USING (user_ndx))
+     JOIN data.assoc_user_to_loc ul USING (user_ndx))
+     JOIN data.assoc_loc_to_water_colors lwc USING (loc_ndx))
+     JOIN data.list_locations l USING (loc_ndx))
+     JOIN data.list_water_colors wc ON ((wc.wc_ndx = lwc.wc_ndx)))
+     LEFT JOIN data.assoc_user_to_water_color uwc ON (((uwc.wc_ndx = lwc.wc_ndx) AND (uwc.user_ndx = f.user_ndx))))
+  GROUP BY f.user_ndx, u.user_name, lwc.wc_ndx, uwc.wc_ndx, wc.wc_name,
+        CASE
+            WHEN (uwc.wc_ndx IS NOT NULL) THEN true
+            ELSE false
+        END
+  ORDER BY
+        CASE
+            WHEN (uwc.wc_ndx IS NOT NULL) THEN true
+            ELSE false
+        END DESC, wc.wc_name;
+
+
+ALTER TABLE table_display_build_assoc_triple_users_locs_wcs_prep OWNER TO ark_admin;
+
+--
+-- TOC entry 281 (class 1259 OID 25701)
+-- Name: table_display_build_assoc_triple_users_locs_wcs; Type: VIEW; Schema: tools; Owner: ark_admin
+--
+
+CREATE VIEW table_display_build_assoc_triple_users_locs_wcs AS
+ SELECT t.user_name,
+    t.loc_name,
+    t.wc_ndx,
+    t.wc_name
+   FROM table_display_build_assoc_triple_users_locs_wcs_prep t
+  ORDER BY t.assoc_true DESC, t.wc_name;
+
+
+ALTER TABLE table_display_build_assoc_triple_users_locs_wcs OWNER TO ark_admin;
+
 SET search_path = web, pg_catalog;
 
 --
@@ -2807,10 +3199,10 @@ ALTER TABLE exchange_to_wc_dropdown OWNER TO ark_admin;
 
 --
 -- TOC entry 230 (class 1259 OID 25116)
--- Name: landing_form_1; Type: TABLE; Schema: web; Owner: ark_admin
+-- Name: landing_form1; Type: TABLE; Schema: web; Owner: ark_admin
 --
 
-CREATE TABLE landing_form_1 (
+CREATE TABLE landing_form1 (
     landing_ndx integer NOT NULL,
     user_ndx integer,
     own_ndx_selected integer,
@@ -2823,148 +3215,149 @@ CREATE TABLE landing_form_1 (
     user_email text,
     user_phone text,
     submit_timestamp timestamp without time zone DEFAULT now() NOT NULL,
-    drupal_userid integer
+    drupal_userid integer,
+    req_type_ndx integer
 );
 
 
-ALTER TABLE landing_form_1 OWNER TO ark_admin;
+ALTER TABLE landing_form1 OWNER TO ark_admin;
 
 --
--- TOC entry 2636 (class 0 OID 0)
+-- TOC entry 2667 (class 0 OID 0)
 -- Dependencies: 230
--- Name: TABLE landing_form_1; Type: COMMENT; Schema: web; Owner: ark_admin
+-- Name: TABLE landing_form1; Type: COMMENT; Schema: web; Owner: ark_admin
 --
 
-COMMENT ON TABLE landing_form_1 IS 'Raw landing table for the contact info page used by all form types.  This table is emptied after the final submission of a form, and values are saved with the appropriate form type record values to the proper archive schema log table.';
+COMMENT ON TABLE landing_form1 IS 'Raw landing table for the contact info page used by all form types.  This table is emptied after the final submission of a form, and values are saved with the appropriate form type record values to the proper archive schema log table.';
 
 
 --
--- TOC entry 2637 (class 0 OID 0)
+-- TOC entry 2668 (class 0 OID 0)
 -- Dependencies: 230
--- Name: COLUMN landing_form_1.landing_ndx; Type: COMMENT; Schema: web; Owner: ark_admin
+-- Name: COLUMN landing_form1.landing_ndx; Type: COMMENT; Schema: web; Owner: ark_admin
 --
 
-COMMENT ON COLUMN landing_form_1.landing_ndx IS 'auto generating table index';
+COMMENT ON COLUMN landing_form1.landing_ndx IS 'auto generating table index';
 
 
 --
--- TOC entry 2638 (class 0 OID 0)
+-- TOC entry 2669 (class 0 OID 0)
 -- Dependencies: 230
--- Name: COLUMN landing_form_1.user_ndx; Type: COMMENT; Schema: web; Owner: ark_admin
+-- Name: COLUMN landing_form1.user_ndx; Type: COMMENT; Schema: web; Owner: ark_admin
 --
 
-COMMENT ON COLUMN landing_form_1.user_ndx IS 'index for system user submitting the form, keyed to [data].[list_users]';
+COMMENT ON COLUMN landing_form1.user_ndx IS 'index for system user submitting the form, keyed to [data].[list_users]';
 
 
 --
--- TOC entry 2639 (class 0 OID 0)
+-- TOC entry 2670 (class 0 OID 0)
 -- Dependencies: 230
--- Name: COLUMN landing_form_1.own_ndx_selected; Type: COMMENT; Schema: web; Owner: ark_admin
+-- Name: COLUMN landing_form1.own_ndx_selected; Type: COMMENT; Schema: web; Owner: ark_admin
 --
 
-COMMENT ON COLUMN landing_form_1.own_ndx_selected IS 'index for ownerentity user submitting on behalf of, keyed to [data].[list_ownerentities]';
+COMMENT ON COLUMN landing_form1.own_ndx_selected IS 'index for ownerentity user submitting on behalf of, keyed to [data].[list_ownerentities]';
 
 
 --
--- TOC entry 2640 (class 0 OID 0)
+-- TOC entry 2671 (class 0 OID 0)
 -- Dependencies: 230
--- Name: COLUMN landing_form_1.default_selection; Type: COMMENT; Schema: web; Owner: ark_admin
+-- Name: COLUMN landing_form1.default_selection; Type: COMMENT; Schema: web; Owner: ark_admin
 --
 
-COMMENT ON COLUMN landing_form_1.default_selection IS 'check-box for "make this my default selection" option; when true, update the appropriate user to entity assoc records.';
+COMMENT ON COLUMN landing_form1.default_selection IS 'check-box for "make this my default selection" option; when true, update the appropriate user to entity assoc records.';
 
 
 --
--- TOC entry 2641 (class 0 OID 0)
+-- TOC entry 2672 (class 0 OID 0)
 -- Dependencies: 230
--- Name: COLUMN landing_form_1.ownerentity_name; Type: COMMENT; Schema: web; Owner: ark_admin
+-- Name: COLUMN landing_form1.ownerentity_name; Type: COMMENT; Schema: web; Owner: ark_admin
 --
 
-COMMENT ON COLUMN landing_form_1.ownerentity_name IS 'name for the own_ndx_selected (user may have edited this)';
+COMMENT ON COLUMN landing_form1.ownerentity_name IS 'name for the own_ndx_selected (user may have edited this)';
 
 
 --
--- TOC entry 2642 (class 0 OID 0)
+-- TOC entry 2673 (class 0 OID 0)
 -- Dependencies: 230
--- Name: COLUMN landing_form_1.ownerentity_email; Type: COMMENT; Schema: web; Owner: ark_admin
+-- Name: COLUMN landing_form1.ownerentity_email; Type: COMMENT; Schema: web; Owner: ark_admin
 --
 
-COMMENT ON COLUMN landing_form_1.ownerentity_email IS 'email address for the own_ndx_selected (user may have edited this)';
+COMMENT ON COLUMN landing_form1.ownerentity_email IS 'email address for the own_ndx_selected (user may have edited this)';
 
 
 --
--- TOC entry 2643 (class 0 OID 0)
+-- TOC entry 2674 (class 0 OID 0)
 -- Dependencies: 230
--- Name: COLUMN landing_form_1.ownerentity_phone; Type: COMMENT; Schema: web; Owner: ark_admin
+-- Name: COLUMN landing_form1.ownerentity_phone; Type: COMMENT; Schema: web; Owner: ark_admin
 --
 
-COMMENT ON COLUMN landing_form_1.ownerentity_phone IS 'phone number field for the own_ndx_selected (user may have edited this)';
+COMMENT ON COLUMN landing_form1.ownerentity_phone IS 'phone number field for the own_ndx_selected (user may have edited this)';
 
 
 --
--- TOC entry 2644 (class 0 OID 0)
+-- TOC entry 2675 (class 0 OID 0)
 -- Dependencies: 230
--- Name: COLUMN landing_form_1.additional_info; Type: COMMENT; Schema: web; Owner: ark_admin
+-- Name: COLUMN landing_form1.additional_info; Type: COMMENT; Schema: web; Owner: ark_admin
 --
 
-COMMENT ON COLUMN landing_form_1.additional_info IS 'additional info field (not required)';
+COMMENT ON COLUMN landing_form1.additional_info IS 'additional info field (not required)';
 
 
 --
--- TOC entry 2645 (class 0 OID 0)
+-- TOC entry 2676 (class 0 OID 0)
 -- Dependencies: 230
--- Name: COLUMN landing_form_1.user_entity; Type: COMMENT; Schema: web; Owner: ark_admin
+-- Name: COLUMN landing_form1.user_entity; Type: COMMENT; Schema: web; Owner: ark_admin
 --
 
-COMMENT ON COLUMN landing_form_1.user_entity IS 'ownerentity name associated with the system user submitting the form (user may have changed this)';
+COMMENT ON COLUMN landing_form1.user_entity IS 'ownerentity name associated with the system user submitting the form (user may have changed this)';
 
 
 --
--- TOC entry 2646 (class 0 OID 0)
+-- TOC entry 2677 (class 0 OID 0)
 -- Dependencies: 230
--- Name: COLUMN landing_form_1.user_email; Type: COMMENT; Schema: web; Owner: ark_admin
+-- Name: COLUMN landing_form1.user_email; Type: COMMENT; Schema: web; Owner: ark_admin
 --
 
-COMMENT ON COLUMN landing_form_1.user_email IS 'email address associated with the system user submitting the form (user may have changed this)';
+COMMENT ON COLUMN landing_form1.user_email IS 'email address associated with the system user submitting the form (user may have changed this)';
 
 
 --
--- TOC entry 2647 (class 0 OID 0)
+-- TOC entry 2678 (class 0 OID 0)
 -- Dependencies: 230
--- Name: COLUMN landing_form_1.user_phone; Type: COMMENT; Schema: web; Owner: ark_admin
+-- Name: COLUMN landing_form1.user_phone; Type: COMMENT; Schema: web; Owner: ark_admin
 --
 
-COMMENT ON COLUMN landing_form_1.user_phone IS 'primary contact phone # associated with the system user submitting the form (user may have changed this)';
+COMMENT ON COLUMN landing_form1.user_phone IS 'primary contact phone # associated with the system user submitting the form (user may have changed this)';
 
 
 --
--- TOC entry 2648 (class 0 OID 0)
+-- TOC entry 2679 (class 0 OID 0)
 -- Dependencies: 230
--- Name: COLUMN landing_form_1.drupal_userid; Type: COMMENT; Schema: web; Owner: ark_admin
+-- Name: COLUMN landing_form1.drupal_userid; Type: COMMENT; Schema: web; Owner: ark_admin
 --
 
-COMMENT ON COLUMN landing_form_1.drupal_userid IS 'drupal user submitting the form';
+COMMENT ON COLUMN landing_form1.drupal_userid IS 'drupal user submitting the form';
 
 
 --
 -- TOC entry 242 (class 1259 OID 25296)
--- Name: landing_form_1_json; Type: TABLE; Schema: web; Owner: ark_admin
+-- Name: landing_form1_json; Type: TABLE; Schema: web; Owner: ark_admin
 --
 
-CREATE TABLE landing_form_1_json (
+CREATE TABLE landing_form1_json (
     json_obj json,
     drupal_userid integer
 );
 
 
-ALTER TABLE landing_form_1_json OWNER TO ark_admin;
+ALTER TABLE landing_form1_json OWNER TO ark_admin;
 
 --
 -- TOC entry 229 (class 1259 OID 25114)
--- Name: landing_form_1_landing_ndx_seq; Type: SEQUENCE; Schema: web; Owner: ark_admin
+-- Name: landing_form1_landing_ndx_seq; Type: SEQUENCE; Schema: web; Owner: ark_admin
 --
 
-CREATE SEQUENCE landing_form_1_landing_ndx_seq
+CREATE SEQUENCE landing_form1_landing_ndx_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -2972,15 +3365,15 @@ CREATE SEQUENCE landing_form_1_landing_ndx_seq
     CACHE 1;
 
 
-ALTER TABLE landing_form_1_landing_ndx_seq OWNER TO ark_admin;
+ALTER TABLE landing_form1_landing_ndx_seq OWNER TO ark_admin;
 
 --
--- TOC entry 2651 (class 0 OID 0)
+-- TOC entry 2682 (class 0 OID 0)
 -- Dependencies: 229
--- Name: landing_form_1_landing_ndx_seq; Type: SEQUENCE OWNED BY; Schema: web; Owner: ark_admin
+-- Name: landing_form1_landing_ndx_seq; Type: SEQUENCE OWNED BY; Schema: web; Owner: ark_admin
 --
 
-ALTER SEQUENCE landing_form_1_landing_ndx_seq OWNED BY landing_form_1.landing_ndx;
+ALTER SEQUENCE landing_form1_landing_ndx_seq OWNED BY landing_form1.landing_ndx;
 
 
 --
@@ -2998,7 +3391,7 @@ CREATE TABLE landing_request_cancellation (
 ALTER TABLE landing_request_cancellation OWNER TO ark_admin;
 
 --
--- TOC entry 2653 (class 0 OID 0)
+-- TOC entry 2684 (class 0 OID 0)
 -- Dependencies: 276
 -- Name: TABLE landing_request_cancellation; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3007,7 +3400,7 @@ COMMENT ON TABLE landing_request_cancellation IS 'Raw landing table for data sub
 
 
 --
--- TOC entry 2654 (class 0 OID 0)
+-- TOC entry 2685 (class 0 OID 0)
 -- Dependencies: 276
 -- Name: COLUMN landing_request_cancellation.landing_ndx; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3016,7 +3409,7 @@ COMMENT ON COLUMN landing_request_cancellation.landing_ndx IS 'landing table ind
 
 
 --
--- TOC entry 2655 (class 0 OID 0)
+-- TOC entry 2686 (class 0 OID 0)
 -- Dependencies: 276
 -- Name: COLUMN landing_request_cancellation.drupal_userid; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3055,7 +3448,7 @@ CREATE TABLE landing_request_exchange (
 ALTER TABLE landing_request_exchange OWNER TO ark_admin;
 
 --
--- TOC entry 2657 (class 0 OID 0)
+-- TOC entry 2688 (class 0 OID 0)
 -- Dependencies: 239
 -- Name: TABLE landing_request_exchange; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3064,7 +3457,7 @@ COMMENT ON TABLE landing_request_exchange IS 'Raw landing table for data submitt
 
 
 --
--- TOC entry 2658 (class 0 OID 0)
+-- TOC entry 2689 (class 0 OID 0)
 -- Dependencies: 239
 -- Name: COLUMN landing_request_exchange.landing_ndx; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3073,7 +3466,7 @@ COMMENT ON COLUMN landing_request_exchange.landing_ndx IS 'landing table index l
 
 
 --
--- TOC entry 2659 (class 0 OID 0)
+-- TOC entry 2690 (class 0 OID 0)
 -- Dependencies: 239
 -- Name: COLUMN landing_request_exchange.exchange_start_date; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3082,7 +3475,7 @@ COMMENT ON COLUMN landing_request_exchange.exchange_start_date IS 'Specified sta
 
 
 --
--- TOC entry 2660 (class 0 OID 0)
+-- TOC entry 2691 (class 0 OID 0)
 -- Dependencies: 239
 -- Name: COLUMN landing_request_exchange.exchange_start_time; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3091,7 +3484,7 @@ COMMENT ON COLUMN landing_request_exchange.exchange_start_time IS 'requested sta
 
 
 --
--- TOC entry 2661 (class 0 OID 0)
+-- TOC entry 2692 (class 0 OID 0)
 -- Dependencies: 239
 -- Name: COLUMN landing_request_exchange.exchange_end_date; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3100,7 +3493,7 @@ COMMENT ON COLUMN landing_request_exchange.exchange_end_date IS 'Specified end d
 
 
 --
--- TOC entry 2662 (class 0 OID 0)
+-- TOC entry 2693 (class 0 OID 0)
 -- Dependencies: 239
 -- Name: COLUMN landing_request_exchange.exchange_end_time; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3109,7 +3502,7 @@ COMMENT ON COLUMN landing_request_exchange.exchange_end_time IS 'requested end t
 
 
 --
--- TOC entry 2663 (class 0 OID 0)
+-- TOC entry 2694 (class 0 OID 0)
 -- Dependencies: 239
 -- Name: COLUMN landing_request_exchange.duration_days; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3118,7 +3511,7 @@ COMMENT ON COLUMN landing_request_exchange.duration_days IS 'exchange duration i
 
 
 --
--- TOC entry 2664 (class 0 OID 0)
+-- TOC entry 2695 (class 0 OID 0)
 -- Dependencies: 239
 -- Name: COLUMN landing_request_exchange.exchange_rate; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3127,7 +3520,7 @@ COMMENT ON COLUMN landing_request_exchange.exchange_rate IS 'Requested exchange 
 
 
 --
--- TOC entry 2665 (class 0 OID 0)
+-- TOC entry 2696 (class 0 OID 0)
 -- Dependencies: 239
 -- Name: COLUMN landing_request_exchange.unit_ndx; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3136,7 +3529,7 @@ COMMENT ON COLUMN landing_request_exchange.unit_ndx IS 'Selected units for relea
 
 
 --
--- TOC entry 2666 (class 0 OID 0)
+-- TOC entry 2697 (class 0 OID 0)
 -- Dependencies: 239
 -- Name: COLUMN landing_request_exchange.to_deliv_loc_type_ndx; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3145,7 +3538,7 @@ COMMENT ON COLUMN landing_request_exchange.to_deliv_loc_type_ndx IS 'Exchange to
 
 
 --
--- TOC entry 2667 (class 0 OID 0)
+-- TOC entry 2698 (class 0 OID 0)
 -- Dependencies: 239
 -- Name: COLUMN landing_request_exchange.to_loc_ndx; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3154,7 +3547,7 @@ COMMENT ON COLUMN landing_request_exchange.to_loc_ndx IS 'Exchange to location, 
 
 
 --
--- TOC entry 2668 (class 0 OID 0)
+-- TOC entry 2699 (class 0 OID 0)
 -- Dependencies: 239
 -- Name: COLUMN landing_request_exchange.to_wc_ndx; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3163,7 +3556,7 @@ COMMENT ON COLUMN landing_request_exchange.to_wc_ndx IS 'Exchange to Water Color
 
 
 --
--- TOC entry 2669 (class 0 OID 0)
+-- TOC entry 2700 (class 0 OID 0)
 -- Dependencies: 239
 -- Name: COLUMN landing_request_exchange.to_own_ndx; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3172,7 +3565,7 @@ COMMENT ON COLUMN landing_request_exchange.to_own_ndx IS 'Owner of stored water 
 
 
 --
--- TOC entry 2670 (class 0 OID 0)
+-- TOC entry 2701 (class 0 OID 0)
 -- Dependencies: 239
 -- Name: COLUMN landing_request_exchange.from_deliv_loc_type_ndx; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3181,7 +3574,7 @@ COMMENT ON COLUMN landing_request_exchange.from_deliv_loc_type_ndx IS 'Exchange 
 
 
 --
--- TOC entry 2671 (class 0 OID 0)
+-- TOC entry 2702 (class 0 OID 0)
 -- Dependencies: 239
 -- Name: COLUMN landing_request_exchange.from_loc_ndx; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3190,7 +3583,7 @@ COMMENT ON COLUMN landing_request_exchange.from_loc_ndx IS 'Exchange to location
 
 
 --
--- TOC entry 2672 (class 0 OID 0)
+-- TOC entry 2703 (class 0 OID 0)
 -- Dependencies: 239
 -- Name: COLUMN landing_request_exchange.from_wc_ndx; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3199,7 +3592,7 @@ COMMENT ON COLUMN landing_request_exchange.from_wc_ndx IS 'Exchange to Water Col
 
 
 --
--- TOC entry 2673 (class 0 OID 0)
+-- TOC entry 2704 (class 0 OID 0)
 -- Dependencies: 239
 -- Name: COLUMN landing_request_exchange.from_own_ndx; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3208,7 +3601,7 @@ COMMENT ON COLUMN landing_request_exchange.from_own_ndx IS 'Owner of released wa
 
 
 --
--- TOC entry 2674 (class 0 OID 0)
+-- TOC entry 2705 (class 0 OID 0)
 -- Dependencies: 239
 -- Name: COLUMN landing_request_exchange.additional_notes; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3217,7 +3610,7 @@ COMMENT ON COLUMN landing_request_exchange.additional_notes IS 'Additional notes
 
 
 --
--- TOC entry 2675 (class 0 OID 0)
+-- TOC entry 2706 (class 0 OID 0)
 -- Dependencies: 239
 -- Name: COLUMN landing_request_exchange.drupal_userid; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3291,7 +3684,7 @@ CREATE TABLE landing_request_reservoir (
 ALTER TABLE landing_request_reservoir OWNER TO ark_admin;
 
 --
--- TOC entry 2680 (class 0 OID 0)
+-- TOC entry 2711 (class 0 OID 0)
 -- Dependencies: 231
 -- Name: TABLE landing_request_reservoir; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3300,7 +3693,7 @@ COMMENT ON TABLE landing_request_reservoir IS 'Raw landing table for data submit
 
 
 --
--- TOC entry 2681 (class 0 OID 0)
+-- TOC entry 2712 (class 0 OID 0)
 -- Dependencies: 231
 -- Name: COLUMN landing_request_reservoir.landing_ndx; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3309,7 +3702,7 @@ COMMENT ON COLUMN landing_request_reservoir.landing_ndx IS 'landing table index 
 
 
 --
--- TOC entry 2682 (class 0 OID 0)
+-- TOC entry 2713 (class 0 OID 0)
 -- Dependencies: 231
 -- Name: COLUMN landing_request_reservoir.loc_ndx; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3318,7 +3711,7 @@ COMMENT ON COLUMN landing_request_reservoir.loc_ndx IS 'Selected release from lo
 
 
 --
--- TOC entry 2683 (class 0 OID 0)
+-- TOC entry 2714 (class 0 OID 0)
 -- Dependencies: 231
 -- Name: COLUMN landing_request_reservoir.release_start_date; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3327,7 +3720,7 @@ COMMENT ON COLUMN landing_request_reservoir.release_start_date IS 'Specified rel
 
 
 --
--- TOC entry 2684 (class 0 OID 0)
+-- TOC entry 2715 (class 0 OID 0)
 -- Dependencies: 231
 -- Name: COLUMN landing_request_reservoir.release_start_time; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3336,7 +3729,7 @@ COMMENT ON COLUMN landing_request_reservoir.release_start_time IS 'requested rel
 
 
 --
--- TOC entry 2685 (class 0 OID 0)
+-- TOC entry 2716 (class 0 OID 0)
 -- Dependencies: 231
 -- Name: COLUMN landing_request_reservoir.deliv_loc_type_ndx; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3345,7 +3738,7 @@ COMMENT ON COLUMN landing_request_reservoir.deliv_loc_type_ndx IS 'Delivery Loca
 
 
 --
--- TOC entry 2686 (class 0 OID 0)
+-- TOC entry 2717 (class 0 OID 0)
 -- Dependencies: 231
 -- Name: COLUMN landing_request_reservoir.release_amount; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3354,7 +3747,7 @@ COMMENT ON COLUMN landing_request_reservoir.release_amount IS 'Requested release
 
 
 --
--- TOC entry 2687 (class 0 OID 0)
+-- TOC entry 2718 (class 0 OID 0)
 -- Dependencies: 231
 -- Name: COLUMN landing_request_reservoir.unit_ndx; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3363,7 +3756,7 @@ COMMENT ON COLUMN landing_request_reservoir.unit_ndx IS 'Selected units for rele
 
 
 --
--- TOC entry 2688 (class 0 OID 0)
+-- TOC entry 2719 (class 0 OID 0)
 -- Dependencies: 231
 -- Name: COLUMN landing_request_reservoir.duration_days; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3372,7 +3765,7 @@ COMMENT ON COLUMN landing_request_reservoir.duration_days IS 'release duration r
 
 
 --
--- TOC entry 2689 (class 0 OID 0)
+-- TOC entry 2720 (class 0 OID 0)
 -- Dependencies: 231
 -- Name: COLUMN landing_request_reservoir.wc_ndx; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3381,7 +3774,7 @@ COMMENT ON COLUMN landing_request_reservoir.wc_ndx IS 'Selected Water Color for 
 
 
 --
--- TOC entry 2690 (class 0 OID 0)
+-- TOC entry 2721 (class 0 OID 0)
 -- Dependencies: 231
 -- Name: COLUMN landing_request_reservoir.additional_notes; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3390,7 +3783,7 @@ COMMENT ON COLUMN landing_request_reservoir.additional_notes IS 'Additional note
 
 
 --
--- TOC entry 2691 (class 0 OID 0)
+-- TOC entry 2722 (class 0 OID 0)
 -- Dependencies: 231
 -- Name: COLUMN landing_request_reservoir.drupal_userid; Type: COMMENT; Schema: web; Owner: ark_admin
 --
@@ -3541,7 +3934,7 @@ ALTER TABLE units_dropdown OWNER TO ark_admin;
 SET search_path = data, pg_catalog;
 
 --
--- TOC entry 2269 (class 2604 OID 16687)
+-- TOC entry 2292 (class 2604 OID 16687)
 -- Name: dc_ndx; Type: DEFAULT; Schema: data; Owner: ark_admin
 --
 
@@ -3549,7 +3942,7 @@ ALTER TABLE ONLY assoc_diversion_classes ALTER COLUMN dc_ndx SET DEFAULT nextval
 
 
 --
--- TOC entry 2264 (class 2604 OID 16604)
+-- TOC entry 2287 (class 2604 OID 16604)
 -- Name: exch_fr_ndx; Type: DEFAULT; Schema: data; Owner: ark_admin
 --
 
@@ -3557,7 +3950,7 @@ ALTER TABLE ONLY data_assoc_exch_from ALTER COLUMN exch_fr_ndx SET DEFAULT nextv
 
 
 --
--- TOC entry 2263 (class 2604 OID 16596)
+-- TOC entry 2286 (class 2604 OID 16596)
 -- Name: exch_to_ndx; Type: DEFAULT; Schema: data; Owner: ark_admin
 --
 
@@ -3565,7 +3958,7 @@ ALTER TABLE ONLY data_assoc_exch_to ALTER COLUMN exch_to_ndx SET DEFAULT nextval
 
 
 --
--- TOC entry 2266 (class 2604 OID 16634)
+-- TOC entry 2289 (class 2604 OID 16634)
 -- Name: tran_to_ndx; Type: DEFAULT; Schema: data; Owner: ark_admin
 --
 
@@ -3573,7 +3966,7 @@ ALTER TABLE ONLY data_assoc_transfers_to ALTER COLUMN tran_to_ndx SET DEFAULT ne
 
 
 --
--- TOC entry 2265 (class 2604 OID 16610)
+-- TOC entry 2288 (class 2604 OID 16610)
 -- Name: req_ndx; Type: DEFAULT; Schema: data; Owner: ark_admin
 --
 
@@ -3581,7 +3974,7 @@ ALTER TABLE ONLY data_requests ALTER COLUMN req_ndx SET DEFAULT nextval('data_re
 
 
 --
--- TOC entry 2262 (class 2604 OID 16576)
+-- TOC entry 2285 (class 2604 OID 16576)
 -- Name: log_req_ndx; Type: DEFAULT; Schema: data; Owner: ark_admin
 --
 
@@ -3589,7 +3982,7 @@ ALTER TABLE ONLY data_requests_log ALTER COLUMN log_req_ndx SET DEFAULT nextval(
 
 
 --
--- TOC entry 2268 (class 2604 OID 16676)
+-- TOC entry 2291 (class 2604 OID 16676)
 -- Name: cancel_by_ndx; Type: DEFAULT; Schema: data; Owner: ark_admin
 --
 
@@ -3597,7 +3990,7 @@ ALTER TABLE ONLY list_cancelled_by ALTER COLUMN cancel_by_ndx SET DEFAULT nextva
 
 
 --
--- TOC entry 2267 (class 2604 OID 16665)
+-- TOC entry 2290 (class 2604 OID 16665)
 -- Name: cancel_reason_ndx; Type: DEFAULT; Schema: data; Owner: ark_admin
 --
 
@@ -3605,7 +3998,7 @@ ALTER TABLE ONLY list_cancelled_reasons ALTER COLUMN cancel_reason_ndx SET DEFAU
 
 
 --
--- TOC entry 2259 (class 2604 OID 16498)
+-- TOC entry 2282 (class 2604 OID 16498)
 -- Name: deliv_loc_type_ndx; Type: DEFAULT; Schema: data; Owner: ark_admin
 --
 
@@ -3613,7 +4006,7 @@ ALTER TABLE ONLY list_delivery_loc_types ALTER COLUMN deliv_loc_type_ndx SET DEF
 
 
 --
--- TOC entry 2253 (class 2604 OID 16423)
+-- TOC entry 2276 (class 2604 OID 16423)
 -- Name: loc_ndx; Type: DEFAULT; Schema: data; Owner: ark_admin
 --
 
@@ -3621,7 +4014,7 @@ ALTER TABLE ONLY list_locations ALTER COLUMN loc_ndx SET DEFAULT nextval('list_l
 
 
 --
--- TOC entry 2258 (class 2604 OID 16489)
+-- TOC entry 2281 (class 2604 OID 16489)
 -- Name: log_event_ndx; Type: DEFAULT; Schema: data; Owner: ark_admin
 --
 
@@ -3629,7 +4022,7 @@ ALTER TABLE ONLY list_log_events ALTER COLUMN log_event_ndx SET DEFAULT nextval(
 
 
 --
--- TOC entry 2254 (class 2604 OID 16441)
+-- TOC entry 2277 (class 2604 OID 16441)
 -- Name: own_ndx; Type: DEFAULT; Schema: data; Owner: ark_admin
 --
 
@@ -3637,7 +4030,7 @@ ALTER TABLE ONLY list_ownerentities ALTER COLUMN own_ndx SET DEFAULT nextval('li
 
 
 --
--- TOC entry 2276 (class 2604 OID 25479)
+-- TOC entry 2299 (class 2604 OID 25479)
 -- Name: landing_table_ndx; Type: DEFAULT; Schema: data; Owner: ark_admin
 --
 
@@ -3645,7 +4038,7 @@ ALTER TABLE ONLY list_request_landing_tables ALTER COLUMN landing_table_ndx SET 
 
 
 --
--- TOC entry 2256 (class 2604 OID 16468)
+-- TOC entry 2279 (class 2604 OID 16468)
 -- Name: req_status_ndx; Type: DEFAULT; Schema: data; Owner: ark_admin
 --
 
@@ -3653,7 +4046,7 @@ ALTER TABLE ONLY list_request_status ALTER COLUMN req_status_ndx SET DEFAULT nex
 
 
 --
--- TOC entry 2260 (class 2604 OID 16507)
+-- TOC entry 2283 (class 2604 OID 16507)
 -- Name: req_type_ndx; Type: DEFAULT; Schema: data; Owner: ark_admin
 --
 
@@ -3661,7 +4054,7 @@ ALTER TABLE ONLY list_request_types ALTER COLUMN req_type_ndx SET DEFAULT nextva
 
 
 --
--- TOC entry 2261 (class 2604 OID 16518)
+-- TOC entry 2284 (class 2604 OID 16518)
 -- Name: unit_ndx; Type: DEFAULT; Schema: data; Owner: ark_admin
 --
 
@@ -3669,7 +4062,7 @@ ALTER TABLE ONLY list_units ALTER COLUMN unit_ndx SET DEFAULT nextval('list_unit
 
 
 --
--- TOC entry 2252 (class 2604 OID 16414)
+-- TOC entry 2275 (class 2604 OID 16414)
 -- Name: user_ndx; Type: DEFAULT; Schema: data; Owner: ark_admin
 --
 
@@ -3677,7 +4070,7 @@ ALTER TABLE ONLY list_users ALTER COLUMN user_ndx SET DEFAULT nextval('list_user
 
 
 --
--- TOC entry 2257 (class 2604 OID 16477)
+-- TOC entry 2280 (class 2604 OID 16477)
 -- Name: wc_ndx; Type: DEFAULT; Schema: data; Owner: ark_admin
 --
 
@@ -3685,7 +4078,7 @@ ALTER TABLE ONLY list_water_colors ALTER COLUMN wc_ndx SET DEFAULT nextval('list
 
 
 --
--- TOC entry 2255 (class 2604 OID 16450)
+-- TOC entry 2278 (class 2604 OID 16450)
 -- Name: calc_type_ndx; Type: DEFAULT; Schema: data; Owner: ark_admin
 --
 
@@ -3695,17 +4088,17 @@ ALTER TABLE ONLY list_wc_calc_types ALTER COLUMN calc_type_ndx SET DEFAULT nextv
 SET search_path = web, pg_catalog;
 
 --
--- TOC entry 2271 (class 2604 OID 25119)
+-- TOC entry 2294 (class 2604 OID 25119)
 -- Name: landing_ndx; Type: DEFAULT; Schema: web; Owner: ark_admin
 --
 
-ALTER TABLE ONLY landing_form_1 ALTER COLUMN landing_ndx SET DEFAULT nextval('landing_form_1_landing_ndx_seq'::regclass);
+ALTER TABLE ONLY landing_form1 ALTER COLUMN landing_ndx SET DEFAULT nextval('landing_form1_landing_ndx_seq'::regclass);
 
 
 SET search_path = data, pg_catalog;
 
 --
--- TOC entry 2301 (class 2606 OID 16767)
+-- TOC entry 2324 (class 2606 OID 16767)
 -- Name: assoc_loc_to_water_colors_pkey; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3714,7 +4107,7 @@ ALTER TABLE ONLY assoc_loc_to_water_colors
 
 
 --
--- TOC entry 2347 (class 2606 OID 25492)
+-- TOC entry 2370 (class 2606 OID 25492)
 -- Name: assoc_request_to_landing_tables_pkey; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3723,7 +4116,7 @@ ALTER TABLE ONLY assoc_request_to_landing_tables
 
 
 --
--- TOC entry 2299 (class 2606 OID 16753)
+-- TOC entry 2322 (class 2606 OID 16753)
 -- Name: assoc_user_to_loc_pkey; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3732,7 +4125,7 @@ ALTER TABLE ONLY assoc_user_to_loc
 
 
 --
--- TOC entry 2335 (class 2606 OID 17125)
+-- TOC entry 2358 (class 2606 OID 17125)
 -- Name: assoc_user_to_ownerentity_pkey; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3741,7 +4134,7 @@ ALTER TABLE ONLY assoc_user_to_ownerentity
 
 
 --
--- TOC entry 2303 (class 2606 OID 16741)
+-- TOC entry 2326 (class 2606 OID 16741)
 -- Name: assoc_user_to_water_color_pkey; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3750,7 +4143,7 @@ ALTER TABLE ONLY assoc_user_to_water_color
 
 
 --
--- TOC entry 2285 (class 2606 OID 16658)
+-- TOC entry 2308 (class 2606 OID 16658)
 -- Name: calc_type_ndx_pk; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3759,7 +4152,7 @@ ALTER TABLE ONLY list_wc_calc_types
 
 
 --
--- TOC entry 2331 (class 2606 OID 16681)
+-- TOC entry 2354 (class 2606 OID 16681)
 -- Name: cancel_by_ndx_pk; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3768,7 +4161,7 @@ ALTER TABLE ONLY list_cancelled_by
 
 
 --
--- TOC entry 2319 (class 2606 OID 16718)
+-- TOC entry 2342 (class 2606 OID 16718)
 -- Name: cancel_datetime_pk; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3777,7 +4170,7 @@ ALTER TABLE ONLY data_cancellations
 
 
 --
--- TOC entry 2329 (class 2606 OID 16670)
+-- TOC entry 2352 (class 2606 OID 16670)
 -- Name: cancel_reason_ndx_pk; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3786,7 +4179,7 @@ ALTER TABLE ONLY list_cancelled_reasons
 
 
 --
--- TOC entry 2309 (class 2606 OID 16953)
+-- TOC entry 2332 (class 2606 OID 16953)
 -- Name: data_exchanges_pkey; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3795,7 +4188,7 @@ ALTER TABLE ONLY data_exchanges
 
 
 --
--- TOC entry 2317 (class 2606 OID 16936)
+-- TOC entry 2340 (class 2606 OID 16936)
 -- Name: data_rel_modified_log_pkey; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3804,7 +4197,16 @@ ALTER TABLE ONLY data_rel_modified_log
 
 
 --
--- TOC entry 2315 (class 2606 OID 16779)
+-- TOC entry 2372 (class 2606 OID 25668)
+-- Name: data_requests_form1_pkey; Type: CONSTRAINT; Schema: data; Owner: ark_admin
+--
+
+ALTER TABLE ONLY data_requests_form1_content
+    ADD CONSTRAINT data_requests_form1_pkey PRIMARY KEY (req_ndx);
+
+
+--
+-- TOC entry 2338 (class 2606 OID 16779)
 -- Name: data_requests_pkey; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3813,7 +4215,7 @@ ALTER TABLE ONLY data_requests
 
 
 --
--- TOC entry 2321 (class 2606 OID 17070)
+-- TOC entry 2344 (class 2606 OID 17070)
 -- Name: data_transfers_pkey; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3822,7 +4224,7 @@ ALTER TABLE ONLY data_transfers
 
 
 --
--- TOC entry 2325 (class 2606 OID 17092)
+-- TOC entry 2348 (class 2606 OID 17092)
 -- Name: data_uscapture_pkey; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3831,7 +4233,7 @@ ALTER TABLE ONLY data_uscapture
 
 
 --
--- TOC entry 2333 (class 2606 OID 16692)
+-- TOC entry 2356 (class 2606 OID 16692)
 -- Name: dc_ndx_pk; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3840,7 +4242,7 @@ ALTER TABLE ONLY assoc_diversion_classes
 
 
 --
--- TOC entry 2293 (class 2606 OID 16704)
+-- TOC entry 2316 (class 2606 OID 16704)
 -- Name: deliv_loc_type_ndx_pk; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3849,7 +4251,7 @@ ALTER TABLE ONLY list_delivery_loc_types
 
 
 --
--- TOC entry 2313 (class 2606 OID 16714)
+-- TOC entry 2336 (class 2606 OID 16714)
 -- Name: exch_fr_ndx_pk; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3858,7 +4260,7 @@ ALTER TABLE ONLY data_assoc_exch_from
 
 
 --
--- TOC entry 2311 (class 2606 OID 16712)
+-- TOC entry 2334 (class 2606 OID 16712)
 -- Name: exch_to_ndx_pk; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3867,7 +4269,7 @@ ALTER TABLE ONLY data_assoc_exch_to
 
 
 --
--- TOC entry 2327 (class 2606 OID 16650)
+-- TOC entry 2350 (class 2606 OID 16650)
 -- Name: list_drupal_user_pkey; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3876,7 +4278,7 @@ ALTER TABLE ONLY list_drupal_users
 
 
 --
--- TOC entry 2345 (class 2606 OID 25484)
+-- TOC entry 2368 (class 2606 OID 25484)
 -- Name: list_request_landing_tables_pkey; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3885,7 +4287,7 @@ ALTER TABLE ONLY list_request_landing_tables
 
 
 --
--- TOC entry 2281 (class 2606 OID 16654)
+-- TOC entry 2304 (class 2606 OID 16654)
 -- Name: loc_ndx_pk; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3894,7 +4296,7 @@ ALTER TABLE ONLY list_locations
 
 
 --
--- TOC entry 2291 (class 2606 OID 16700)
+-- TOC entry 2314 (class 2606 OID 16700)
 -- Name: log_event_ndx_pk; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3903,7 +4305,7 @@ ALTER TABLE ONLY list_log_events
 
 
 --
--- TOC entry 2305 (class 2606 OID 16708)
+-- TOC entry 2328 (class 2606 OID 16708)
 -- Name: log_req_ndx_pk; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3912,7 +4314,7 @@ ALTER TABLE ONLY data_requests_log
 
 
 --
--- TOC entry 2283 (class 2606 OID 16656)
+-- TOC entry 2306 (class 2606 OID 16656)
 -- Name: own_ndx_pk; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3921,7 +4323,7 @@ ALTER TABLE ONLY list_ownerentities
 
 
 --
--- TOC entry 2307 (class 2606 OID 16710)
+-- TOC entry 2330 (class 2606 OID 16710)
 -- Name: req_ndx_pk; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3930,7 +4332,7 @@ ALTER TABLE ONLY data_releases
 
 
 --
--- TOC entry 2287 (class 2606 OID 16694)
+-- TOC entry 2310 (class 2606 OID 16694)
 -- Name: req_status_ndx_pk; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3939,7 +4341,7 @@ ALTER TABLE ONLY list_request_status
 
 
 --
--- TOC entry 2295 (class 2606 OID 16696)
+-- TOC entry 2318 (class 2606 OID 16696)
 -- Name: req_type_ndx_pk; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3948,7 +4350,7 @@ ALTER TABLE ONLY list_request_types
 
 
 --
--- TOC entry 2337 (class 2606 OID 25046)
+-- TOC entry 2360 (class 2606 OID 25046)
 -- Name: test_list_users_pkey; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3957,7 +4359,7 @@ ALTER TABLE ONLY test_list_users
 
 
 --
--- TOC entry 2323 (class 2606 OID 16716)
+-- TOC entry 2346 (class 2606 OID 16716)
 -- Name: tran_to_ndx_pk; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3966,7 +4368,7 @@ ALTER TABLE ONLY data_assoc_transfers_to
 
 
 --
--- TOC entry 2297 (class 2606 OID 16702)
+-- TOC entry 2320 (class 2606 OID 16702)
 -- Name: unit_ndx_pk; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3975,7 +4377,7 @@ ALTER TABLE ONLY list_units
 
 
 --
--- TOC entry 2279 (class 2606 OID 16706)
+-- TOC entry 2302 (class 2606 OID 16706)
 -- Name: user_ndx_pk; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3984,7 +4386,7 @@ ALTER TABLE ONLY list_users
 
 
 --
--- TOC entry 2289 (class 2606 OID 16698)
+-- TOC entry 2312 (class 2606 OID 16698)
 -- Name: wc_ndx_pk; Type: CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -3995,7 +4397,7 @@ ALTER TABLE ONLY list_water_colors
 SET search_path = tools, pg_catalog;
 
 --
--- TOC entry 2343 (class 2606 OID 25404)
+-- TOC entry 2366 (class 2606 OID 25404)
 -- Name: fetchit_landing_selected_user_none_pkey; Type: CONSTRAINT; Schema: tools; Owner: ark_admin
 --
 
@@ -4004,7 +4406,7 @@ ALTER TABLE ONLY fetchit_landing_selected_user_selectnone
 
 
 --
--- TOC entry 2339 (class 2606 OID 25348)
+-- TOC entry 2362 (class 2606 OID 25348)
 -- Name: fetchit_landing_selected_user_omniscient_pkey; Type: CONSTRAINT; Schema: tools; Owner: ark_admin
 --
 
@@ -4013,7 +4415,7 @@ ALTER TABLE ONLY fetchit_landing_selected_user_selectall
 
 
 --
--- TOC entry 2341 (class 2606 OID 25365)
+-- TOC entry 2364 (class 2606 OID 25365)
 -- Name: fetchit_landing_selected_user_to_manage_pkey; Type: CONSTRAINT; Schema: tools; Owner: ark_admin
 --
 
@@ -4024,7 +4426,7 @@ ALTER TABLE ONLY fetchit_landing_selected_user_to_manage
 SET search_path = data, pg_catalog;
 
 --
--- TOC entry 2400 (class 2606 OID 17049)
+-- TOC entry 2425 (class 2606 OID 17049)
 -- Name: assoc_diversion_classes_calc_type_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4033,7 +4435,7 @@ ALTER TABLE ONLY assoc_diversion_classes
 
 
 --
--- TOC entry 2397 (class 2606 OID 17034)
+-- TOC entry 2422 (class 2606 OID 17034)
 -- Name: assoc_diversion_classes_loc_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4042,7 +4444,7 @@ ALTER TABLE ONLY assoc_diversion_classes
 
 
 --
--- TOC entry 2399 (class 2606 OID 17044)
+-- TOC entry 2424 (class 2606 OID 17044)
 -- Name: assoc_diversion_classes_own_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4051,7 +4453,7 @@ ALTER TABLE ONLY assoc_diversion_classes
 
 
 --
--- TOC entry 2398 (class 2606 OID 17039)
+-- TOC entry 2423 (class 2606 OID 17039)
 -- Name: assoc_diversion_classes_wc_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4060,7 +4462,7 @@ ALTER TABLE ONLY assoc_diversion_classes
 
 
 --
--- TOC entry 2352 (class 2606 OID 16768)
+-- TOC entry 2377 (class 2606 OID 16768)
 -- Name: assoc_loc_to_water_colors_loc_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4069,7 +4471,7 @@ ALTER TABLE ONLY assoc_loc_to_water_colors
 
 
 --
--- TOC entry 2353 (class 2606 OID 16773)
+-- TOC entry 2378 (class 2606 OID 16773)
 -- Name: assoc_loc_to_water_colors_wc_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4078,7 +4480,7 @@ ALTER TABLE ONLY assoc_loc_to_water_colors
 
 
 --
--- TOC entry 2405 (class 2606 OID 25503)
+-- TOC entry 2430 (class 2606 OID 25503)
 -- Name: assoc_request_to_landing_table_secondary_landing_table_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4087,7 +4489,7 @@ ALTER TABLE ONLY assoc_request_to_landing_tables
 
 
 --
--- TOC entry 2404 (class 2606 OID 25498)
+-- TOC entry 2429 (class 2606 OID 25498)
 -- Name: assoc_request_to_landing_tables_landing_table_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4096,7 +4498,7 @@ ALTER TABLE ONLY assoc_request_to_landing_tables
 
 
 --
--- TOC entry 2403 (class 2606 OID 25493)
+-- TOC entry 2428 (class 2606 OID 25493)
 -- Name: assoc_request_to_landing_tables_req_type_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4105,7 +4507,7 @@ ALTER TABLE ONLY assoc_request_to_landing_tables
 
 
 --
--- TOC entry 2402 (class 2606 OID 17131)
+-- TOC entry 2427 (class 2606 OID 17131)
 -- Name: assoc_user_to_ownerentity_own_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4114,7 +4516,7 @@ ALTER TABLE ONLY assoc_user_to_ownerentity
 
 
 --
--- TOC entry 2401 (class 2606 OID 17126)
+-- TOC entry 2426 (class 2606 OID 17126)
 -- Name: assoc_user_to_ownerentity_user_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4123,7 +4525,7 @@ ALTER TABLE ONLY assoc_user_to_ownerentity
 
 
 --
--- TOC entry 2354 (class 2606 OID 16742)
+-- TOC entry 2379 (class 2606 OID 16742)
 -- Name: assoc_user_to_water_color_user_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4132,7 +4534,7 @@ ALTER TABLE ONLY assoc_user_to_water_color
 
 
 --
--- TOC entry 2355 (class 2606 OID 16747)
+-- TOC entry 2380 (class 2606 OID 16747)
 -- Name: assoc_user_to_water_color_wc_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4141,7 +4543,7 @@ ALTER TABLE ONLY assoc_user_to_water_color
 
 
 --
--- TOC entry 2372 (class 2606 OID 16974)
+-- TOC entry 2397 (class 2606 OID 16974)
 -- Name: data_assoc_exch_from_fr_deliv_loc_type_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4150,7 +4552,7 @@ ALTER TABLE ONLY data_assoc_exch_from
 
 
 --
--- TOC entry 2371 (class 2606 OID 16969)
+-- TOC entry 2396 (class 2606 OID 16969)
 -- Name: data_assoc_exch_from_fr_loc_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4159,7 +4561,7 @@ ALTER TABLE ONLY data_assoc_exch_from
 
 
 --
--- TOC entry 2374 (class 2606 OID 16984)
+-- TOC entry 2399 (class 2606 OID 16984)
 -- Name: data_assoc_exch_from_fr_own_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4168,7 +4570,7 @@ ALTER TABLE ONLY data_assoc_exch_from
 
 
 --
--- TOC entry 2373 (class 2606 OID 16979)
+-- TOC entry 2398 (class 2606 OID 16979)
 -- Name: data_assoc_exch_from_fr_water_color_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4177,7 +4579,7 @@ ALTER TABLE ONLY data_assoc_exch_from
 
 
 --
--- TOC entry 2370 (class 2606 OID 16964)
+-- TOC entry 2395 (class 2606 OID 16964)
 -- Name: data_assoc_exch_from_req_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4186,7 +4588,7 @@ ALTER TABLE ONLY data_assoc_exch_from
 
 
 --
--- TOC entry 2365 (class 2606 OID 17009)
+-- TOC entry 2390 (class 2606 OID 17009)
 -- Name: data_assoc_exch_to_req_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4195,7 +4597,7 @@ ALTER TABLE ONLY data_assoc_exch_to
 
 
 --
--- TOC entry 2367 (class 2606 OID 17019)
+-- TOC entry 2392 (class 2606 OID 17019)
 -- Name: data_assoc_exch_to_to_deliv_loc_type_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4204,7 +4606,7 @@ ALTER TABLE ONLY data_assoc_exch_to
 
 
 --
--- TOC entry 2366 (class 2606 OID 17014)
+-- TOC entry 2391 (class 2606 OID 17014)
 -- Name: data_assoc_exch_to_to_loc_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4213,7 +4615,7 @@ ALTER TABLE ONLY data_assoc_exch_to
 
 
 --
--- TOC entry 2369 (class 2606 OID 17029)
+-- TOC entry 2394 (class 2606 OID 17029)
 -- Name: data_assoc_exch_to_to_own_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4222,7 +4624,7 @@ ALTER TABLE ONLY data_assoc_exch_to
 
 
 --
--- TOC entry 2368 (class 2606 OID 17024)
+-- TOC entry 2393 (class 2606 OID 17024)
 -- Name: data_assoc_exch_to_to_water_color_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4231,7 +4633,7 @@ ALTER TABLE ONLY data_assoc_exch_to
 
 
 --
--- TOC entry 2388 (class 2606 OID 17071)
+-- TOC entry 2413 (class 2606 OID 17071)
 -- Name: data_assoc_transfers_to_req_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4240,7 +4642,7 @@ ALTER TABLE ONLY data_assoc_transfers_to
 
 
 --
--- TOC entry 2389 (class 2606 OID 17076)
+-- TOC entry 2414 (class 2606 OID 17076)
 -- Name: data_assoc_transfers_to_to_own_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4249,7 +4651,7 @@ ALTER TABLE ONLY data_assoc_transfers_to
 
 
 --
--- TOC entry 2390 (class 2606 OID 17081)
+-- TOC entry 2415 (class 2606 OID 17081)
 -- Name: data_assoc_transfers_to_to_wc_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4258,7 +4660,7 @@ ALTER TABLE ONLY data_assoc_transfers_to
 
 
 --
--- TOC entry 2391 (class 2606 OID 17086)
+-- TOC entry 2416 (class 2606 OID 17086)
 -- Name: data_assoc_transfers_to_units_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4267,7 +4669,7 @@ ALTER TABLE ONLY data_assoc_transfers_to
 
 
 --
--- TOC entry 2383 (class 2606 OID 16900)
+-- TOC entry 2408 (class 2606 OID 16900)
 -- Name: data_cancellations_cancel_by_nxd_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4276,7 +4678,7 @@ ALTER TABLE ONLY data_cancellations
 
 
 --
--- TOC entry 2382 (class 2606 OID 16895)
+-- TOC entry 2407 (class 2606 OID 16895)
 -- Name: data_cancellations_req_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4285,7 +4687,7 @@ ALTER TABLE ONLY data_cancellations
 
 
 --
--- TOC entry 2384 (class 2606 OID 16905)
+-- TOC entry 2409 (class 2606 OID 16905)
 -- Name: data_cancellations_user_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4294,7 +4696,7 @@ ALTER TABLE ONLY data_cancellations
 
 
 --
--- TOC entry 2363 (class 2606 OID 16954)
+-- TOC entry 2388 (class 2606 OID 16954)
 -- Name: data_exchanges_req_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4303,7 +4705,7 @@ ALTER TABLE ONLY data_exchanges
 
 
 --
--- TOC entry 2364 (class 2606 OID 16959)
+-- TOC entry 2389 (class 2606 OID 16959)
 -- Name: data_exchanges_units_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4312,7 +4714,7 @@ ALTER TABLE ONLY data_exchanges
 
 
 --
--- TOC entry 2381 (class 2606 OID 16947)
+-- TOC entry 2406 (class 2606 OID 16947)
 -- Name: data_rel_modified_log_deliv_loc_type_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4321,7 +4723,7 @@ ALTER TABLE ONLY data_rel_modified_log
 
 
 --
--- TOC entry 2380 (class 2606 OID 16942)
+-- TOC entry 2405 (class 2606 OID 16942)
 -- Name: data_rel_modified_log_log_req_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4330,7 +4732,7 @@ ALTER TABLE ONLY data_rel_modified_log
 
 
 --
--- TOC entry 2379 (class 2606 OID 16937)
+-- TOC entry 2404 (class 2606 OID 16937)
 -- Name: data_rel_modified_log_req_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4339,7 +4741,7 @@ ALTER TABLE ONLY data_rel_modified_log
 
 
 --
--- TOC entry 2360 (class 2606 OID 16920)
+-- TOC entry 2385 (class 2606 OID 16920)
 -- Name: data_releases_deliv_loc_type_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4348,7 +4750,7 @@ ALTER TABLE ONLY data_releases
 
 
 --
--- TOC entry 2359 (class 2606 OID 16915)
+-- TOC entry 2384 (class 2606 OID 16915)
 -- Name: data_releases_fr_loc_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4357,7 +4759,7 @@ ALTER TABLE ONLY data_releases
 
 
 --
--- TOC entry 2361 (class 2606 OID 16925)
+-- TOC entry 2386 (class 2606 OID 16925)
 -- Name: data_releases_fr_wc_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4366,7 +4768,7 @@ ALTER TABLE ONLY data_releases
 
 
 --
--- TOC entry 2358 (class 2606 OID 16910)
+-- TOC entry 2383 (class 2606 OID 16910)
 -- Name: data_releases_req_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4375,7 +4777,7 @@ ALTER TABLE ONLY data_releases
 
 
 --
--- TOC entry 2362 (class 2606 OID 16930)
+-- TOC entry 2387 (class 2606 OID 16930)
 -- Name: data_releases_units_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4384,7 +4786,7 @@ ALTER TABLE ONLY data_releases
 
 
 --
--- TOC entry 2357 (class 2606 OID 16880)
+-- TOC entry 2382 (class 2606 OID 16880)
 -- Name: data_requests_log_log_event_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4393,7 +4795,7 @@ ALTER TABLE ONLY data_requests_log
 
 
 --
--- TOC entry 2356 (class 2606 OID 16875)
+-- TOC entry 2381 (class 2606 OID 16875)
 -- Name: data_requests_log_req_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4402,7 +4804,7 @@ ALTER TABLE ONLY data_requests_log
 
 
 --
--- TOC entry 2378 (class 2606 OID 16870)
+-- TOC entry 2403 (class 2606 OID 16870)
 -- Name: data_requests_own_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4411,7 +4813,7 @@ ALTER TABLE ONLY data_requests
 
 
 --
--- TOC entry 2376 (class 2606 OID 16860)
+-- TOC entry 2401 (class 2606 OID 16860)
 -- Name: data_requests_req_status_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4420,7 +4822,7 @@ ALTER TABLE ONLY data_requests
 
 
 --
--- TOC entry 2375 (class 2606 OID 16855)
+-- TOC entry 2400 (class 2606 OID 16855)
 -- Name: data_requests_req_type_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4429,7 +4831,7 @@ ALTER TABLE ONLY data_requests
 
 
 --
--- TOC entry 2377 (class 2606 OID 16865)
+-- TOC entry 2402 (class 2606 OID 16865)
 -- Name: data_requests_user_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4438,7 +4840,7 @@ ALTER TABLE ONLY data_requests
 
 
 --
--- TOC entry 2385 (class 2606 OID 17054)
+-- TOC entry 2410 (class 2606 OID 17054)
 -- Name: data_transfers_fr_own_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4447,7 +4849,7 @@ ALTER TABLE ONLY data_transfers
 
 
 --
--- TOC entry 2387 (class 2606 OID 17064)
+-- TOC entry 2412 (class 2606 OID 17064)
 -- Name: data_transfers_fr_wc_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4456,7 +4858,7 @@ ALTER TABLE ONLY data_transfers
 
 
 --
--- TOC entry 2386 (class 2606 OID 17059)
+-- TOC entry 2411 (class 2606 OID 17059)
 -- Name: data_transfers_req_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4465,7 +4867,7 @@ ALTER TABLE ONLY data_transfers
 
 
 --
--- TOC entry 2395 (class 2606 OID 17108)
+-- TOC entry 2420 (class 2606 OID 17108)
 -- Name: data_uscapture_cap_by_own_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4474,7 +4876,7 @@ ALTER TABLE ONLY data_uscapture
 
 
 --
--- TOC entry 2392 (class 2606 OID 17093)
+-- TOC entry 2417 (class 2606 OID 17093)
 -- Name: data_uscapture_fr_loc_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4483,7 +4885,7 @@ ALTER TABLE ONLY data_uscapture
 
 
 --
--- TOC entry 2393 (class 2606 OID 17098)
+-- TOC entry 2418 (class 2606 OID 17098)
 -- Name: data_uscapture_to_loc_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4492,7 +4894,7 @@ ALTER TABLE ONLY data_uscapture
 
 
 --
--- TOC entry 2396 (class 2606 OID 17113)
+-- TOC entry 2421 (class 2606 OID 17113)
 -- Name: data_uscapture_units_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4501,7 +4903,7 @@ ALTER TABLE ONLY data_uscapture
 
 
 --
--- TOC entry 2394 (class 2606 OID 17103)
+-- TOC entry 2419 (class 2606 OID 17103)
 -- Name: data_uscapture_wc_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4510,7 +4912,7 @@ ALTER TABLE ONLY data_uscapture
 
 
 --
--- TOC entry 2348 (class 2606 OID 16850)
+-- TOC entry 2373 (class 2606 OID 16850)
 -- Name: list_users_drupal_userid_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4519,7 +4921,7 @@ ALTER TABLE ONLY list_users
 
 
 --
--- TOC entry 2349 (class 2606 OID 25141)
+-- TOC entry 2374 (class 2606 OID 25141)
 -- Name: list_users_own_ndx_fkey; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4528,7 +4930,7 @@ ALTER TABLE ONLY list_users
 
 
 --
--- TOC entry 2350 (class 2606 OID 16728)
+-- TOC entry 2375 (class 2606 OID 16728)
 -- Name: loc_ndx_fk; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4537,7 +4939,7 @@ ALTER TABLE ONLY assoc_user_to_loc
 
 
 --
--- TOC entry 2351 (class 2606 OID 16733)
+-- TOC entry 2376 (class 2606 OID 16733)
 -- Name: user_ndx_fk; Type: FK CONSTRAINT; Schema: data; Owner: ark_admin
 --
 
@@ -4548,7 +4950,7 @@ ALTER TABLE ONLY assoc_user_to_loc
 SET search_path = web, pg_catalog;
 
 --
--- TOC entry 2406 (class 2606 OID 25628)
+-- TOC entry 2431 (class 2606 OID 25628)
 -- Name: landing_request_exchange_secondary_from_loc_ndx_fkey; Type: FK CONSTRAINT; Schema: web; Owner: ark_admin
 --
 
@@ -4557,7 +4959,7 @@ ALTER TABLE ONLY landing_request_exchange_secondary
 
 
 --
--- TOC entry 2546 (class 0 OID 0)
+-- TOC entry 2572 (class 0 OID 0)
 -- Dependencies: 9
 -- Name: data; Type: ACL; Schema: -; Owner: ark_admin
 --
@@ -4569,7 +4971,7 @@ GRANT USAGE ON SCHEMA data TO web_users;
 
 
 --
--- TOC entry 2548 (class 0 OID 0)
+-- TOC entry 2574 (class 0 OID 0)
 -- Dependencies: 6
 -- Name: public; Type: ACL; Schema: -; Owner: postgres
 --
@@ -4581,7 +4983,7 @@ GRANT ALL ON SCHEMA public TO PUBLIC;
 
 
 --
--- TOC entry 2549 (class 0 OID 0)
+-- TOC entry 2575 (class 0 OID 0)
 -- Dependencies: 12
 -- Name: tools; Type: ACL; Schema: -; Owner: ark_admin
 --
@@ -4593,7 +4995,7 @@ GRANT USAGE ON SCHEMA tools TO web_users;
 
 
 --
--- TOC entry 2550 (class 0 OID 0)
+-- TOC entry 2576 (class 0 OID 0)
 -- Dependencies: 10
 -- Name: web; Type: ACL; Schema: -; Owner: ark_admin
 --
@@ -4607,7 +5009,7 @@ GRANT USAGE ON SCHEMA web TO web_users;
 SET search_path = data, pg_catalog;
 
 --
--- TOC entry 2575 (class 0 OID 0)
+-- TOC entry 2601 (class 0 OID 0)
 -- Dependencies: 197
 -- Name: assoc_loc_to_water_colors; Type: ACL; Schema: data; Owner: ark_admin
 --
@@ -4619,7 +5021,7 @@ GRANT SELECT,INSERT,DELETE ON TABLE assoc_loc_to_water_colors TO web_users;
 
 
 --
--- TOC entry 2576 (class 0 OID 0)
+-- TOC entry 2602 (class 0 OID 0)
 -- Dependencies: 259
 -- Name: assoc_request_to_landing_tables; Type: ACL; Schema: data; Owner: ark_admin
 --
@@ -4630,7 +5032,31 @@ GRANT ALL ON TABLE assoc_request_to_landing_tables TO ark_admin;
 
 
 --
--- TOC entry 2585 (class 0 OID 0)
+-- TOC entry 2603 (class 0 OID 0)
+-- Dependencies: 196
+-- Name: assoc_user_to_loc; Type: ACL; Schema: data; Owner: ark_admin
+--
+
+REVOKE ALL ON TABLE assoc_user_to_loc FROM PUBLIC;
+REVOKE ALL ON TABLE assoc_user_to_loc FROM ark_admin;
+GRANT ALL ON TABLE assoc_user_to_loc TO ark_admin;
+GRANT SELECT,INSERT,DELETE ON TABLE assoc_user_to_loc TO web_users;
+
+
+--
+-- TOC entry 2604 (class 0 OID 0)
+-- Dependencies: 198
+-- Name: assoc_user_to_water_color; Type: ACL; Schema: data; Owner: ark_admin
+--
+
+REVOKE ALL ON TABLE assoc_user_to_water_color FROM PUBLIC;
+REVOKE ALL ON TABLE assoc_user_to_water_color FROM ark_admin;
+GRANT ALL ON TABLE assoc_user_to_water_color TO ark_admin;
+GRANT SELECT,INSERT,DELETE ON TABLE assoc_user_to_water_color TO web_users;
+
+
+--
+-- TOC entry 2613 (class 0 OID 0)
 -- Dependencies: 179
 -- Name: list_locations; Type: ACL; Schema: data; Owner: ark_admin
 --
@@ -4642,7 +5068,7 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE list_locations TO web_users;
 
 
 --
--- TOC entry 2587 (class 0 OID 0)
+-- TOC entry 2615 (class 0 OID 0)
 -- Dependencies: 178
 -- Name: list_locations_loc_ndx_seq; Type: ACL; Schema: data; Owner: ark_admin
 --
@@ -4654,7 +5080,7 @@ GRANT SELECT,UPDATE ON SEQUENCE list_locations_loc_ndx_seq TO web_users;
 
 
 --
--- TOC entry 2589 (class 0 OID 0)
+-- TOC entry 2617 (class 0 OID 0)
 -- Dependencies: 181
 -- Name: list_ownerentities; Type: ACL; Schema: data; Owner: ark_admin
 --
@@ -4666,7 +5092,7 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE list_ownerentities TO web_users;
 
 
 --
--- TOC entry 2591 (class 0 OID 0)
+-- TOC entry 2619 (class 0 OID 0)
 -- Dependencies: 180
 -- Name: list_ownerentities_own_ndx_seq; Type: ACL; Schema: data; Owner: ark_admin
 --
@@ -4678,7 +5104,7 @@ GRANT SELECT,UPDATE ON SEQUENCE list_ownerentities_own_ndx_seq TO web_users;
 
 
 --
--- TOC entry 2596 (class 0 OID 0)
+-- TOC entry 2624 (class 0 OID 0)
 -- Dependencies: 177
 -- Name: list_users; Type: ACL; Schema: data; Owner: ark_admin
 --
@@ -4690,7 +5116,7 @@ GRANT SELECT ON TABLE list_users TO web_users;
 
 
 --
--- TOC entry 2598 (class 0 OID 0)
+-- TOC entry 2626 (class 0 OID 0)
 -- Dependencies: 187
 -- Name: list_water_colors; Type: ACL; Schema: data; Owner: ark_admin
 --
@@ -4702,7 +5128,7 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE list_water_colors TO web_users;
 
 
 --
--- TOC entry 2600 (class 0 OID 0)
+-- TOC entry 2628 (class 0 OID 0)
 -- Dependencies: 186
 -- Name: list_water_colors_wc_ndx_seq; Type: ACL; Schema: data; Owner: ark_admin
 --
@@ -4714,7 +5140,7 @@ GRANT SELECT,UPDATE ON SEQUENCE list_water_colors_wc_ndx_seq TO web_users;
 
 
 --
--- TOC entry 2602 (class 0 OID 0)
+-- TOC entry 2630 (class 0 OID 0)
 -- Dependencies: 223
 -- Name: test_list_users; Type: ACL; Schema: data; Owner: ark_admin
 --
@@ -4728,7 +5154,7 @@ GRANT SELECT,INSERT,DELETE ON TABLE test_list_users TO web_users;
 SET search_path = tools, pg_catalog;
 
 --
--- TOC entry 2603 (class 0 OID 0)
+-- TOC entry 2631 (class 0 OID 0)
 -- Dependencies: 241
 -- Name: data_users_01; Type: ACL; Schema: tools; Owner: ark_admin
 --
@@ -4740,7 +5166,7 @@ GRANT SELECT ON TABLE data_users_01 TO web_users;
 
 
 --
--- TOC entry 2604 (class 0 OID 0)
+-- TOC entry 2632 (class 0 OID 0)
 -- Dependencies: 253
 -- Name: data_users_02_entities; Type: ACL; Schema: tools; Owner: ark_admin
 --
@@ -4752,7 +5178,7 @@ GRANT SELECT ON TABLE data_users_02_entities TO web_users;
 
 
 --
--- TOC entry 2605 (class 0 OID 0)
+-- TOC entry 2633 (class 0 OID 0)
 -- Dependencies: 252
 -- Name: data_users_03_locations; Type: ACL; Schema: tools; Owner: ark_admin
 --
@@ -4764,7 +5190,7 @@ GRANT SELECT ON TABLE data_users_03_locations TO web_users;
 
 
 --
--- TOC entry 2606 (class 0 OID 0)
+-- TOC entry 2634 (class 0 OID 0)
 -- Dependencies: 251
 -- Name: data_users_04_watercolors; Type: ACL; Schema: tools; Owner: ark_admin
 --
@@ -4776,7 +5202,7 @@ GRANT SELECT ON TABLE data_users_04_watercolors TO web_users;
 
 
 --
--- TOC entry 2607 (class 0 OID 0)
+-- TOC entry 2635 (class 0 OID 0)
 -- Dependencies: 254
 -- Name: data_users_associations_display_gviz; Type: ACL; Schema: tools; Owner: ark_admin
 --
@@ -4788,7 +5214,7 @@ GRANT SELECT ON TABLE data_users_associations_display_gviz TO web_users;
 
 
 --
--- TOC entry 2608 (class 0 OID 0)
+-- TOC entry 2636 (class 0 OID 0)
 -- Dependencies: 267
 -- Name: dd_locations; Type: ACL; Schema: tools; Owner: ark_admin
 --
@@ -4800,7 +5226,7 @@ GRANT SELECT ON TABLE dd_locations TO web_users;
 
 
 --
--- TOC entry 2609 (class 0 OID 0)
+-- TOC entry 2637 (class 0 OID 0)
 -- Dependencies: 245
 -- Name: dd_users; Type: ACL; Schema: tools; Owner: ark_admin
 --
@@ -4812,7 +5238,7 @@ GRANT SELECT ON TABLE dd_users TO web_users;
 
 
 --
--- TOC entry 2610 (class 0 OID 0)
+-- TOC entry 2638 (class 0 OID 0)
 -- Dependencies: 269
 -- Name: egrid_assoc_locations_and_water_colors; Type: ACL; Schema: tools; Owner: ark_admin
 --
@@ -4824,7 +5250,19 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE egrid_assoc_locations_and_water_color
 
 
 --
--- TOC entry 2611 (class 0 OID 0)
+-- TOC entry 2639 (class 0 OID 0)
+-- Dependencies: 278
+-- Name: egrid_assoc_triple_users_locs_wcs; Type: ACL; Schema: tools; Owner: ark_admin
+--
+
+REVOKE ALL ON TABLE egrid_assoc_triple_users_locs_wcs FROM PUBLIC;
+REVOKE ALL ON TABLE egrid_assoc_triple_users_locs_wcs FROM ark_admin;
+GRANT ALL ON TABLE egrid_assoc_triple_users_locs_wcs TO ark_admin;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE egrid_assoc_triple_users_locs_wcs TO web_users;
+
+
+--
+-- TOC entry 2640 (class 0 OID 0)
 -- Dependencies: 272
 -- Name: egrid_assoc_users_and_entities; Type: ACL; Schema: tools; Owner: ark_admin
 --
@@ -4836,7 +5274,7 @@ GRANT SELECT ON TABLE egrid_assoc_users_and_entities TO web_users;
 
 
 --
--- TOC entry 2612 (class 0 OID 0)
+-- TOC entry 2641 (class 0 OID 0)
 -- Dependencies: 268
 -- Name: fetchit_landing_selected_loc_for_wc_assoc; Type: ACL; Schema: tools; Owner: ark_admin
 --
@@ -4848,7 +5286,7 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE fetchit_landing_selected_loc_for_wc_a
 
 
 --
--- TOC entry 2613 (class 0 OID 0)
+-- TOC entry 2642 (class 0 OID 0)
 -- Dependencies: 270
 -- Name: egrid_build_assoc_locations_and_water_colors; Type: ACL; Schema: tools; Owner: ark_admin
 --
@@ -4860,7 +5298,7 @@ GRANT SELECT ON TABLE egrid_build_assoc_locations_and_water_colors TO web_users;
 
 
 --
--- TOC entry 2614 (class 0 OID 0)
+-- TOC entry 2643 (class 0 OID 0)
 -- Dependencies: 246
 -- Name: fetchit_landing_selected_user_selectall; Type: ACL; Schema: tools; Owner: ark_admin
 --
@@ -4872,7 +5310,7 @@ GRANT ALL ON TABLE fetchit_landing_selected_user_selectall TO web_users;
 
 
 --
--- TOC entry 2615 (class 0 OID 0)
+-- TOC entry 2644 (class 0 OID 0)
 -- Dependencies: 249
 -- Name: fetchit_landing_selected_user_selectnone; Type: ACL; Schema: tools; Owner: ark_admin
 --
@@ -4884,7 +5322,7 @@ GRANT ALL ON TABLE fetchit_landing_selected_user_selectnone TO web_users;
 
 
 --
--- TOC entry 2616 (class 0 OID 0)
+-- TOC entry 2645 (class 0 OID 0)
 -- Dependencies: 247
 -- Name: fetchit_landing_selected_user_to_manage; Type: ACL; Schema: tools; Owner: ark_admin
 --
@@ -4896,7 +5334,7 @@ GRANT ALL ON TABLE fetchit_landing_selected_user_to_manage TO web_users;
 
 
 --
--- TOC entry 2617 (class 0 OID 0)
+-- TOC entry 2646 (class 0 OID 0)
 -- Dependencies: 250
 -- Name: fetchit_landing_user_to_manage_last_submit; Type: ACL; Schema: tools; Owner: ark_admin
 --
@@ -4908,19 +5346,7 @@ GRANT SELECT ON TABLE fetchit_landing_user_to_manage_last_submit TO web_users;
 
 
 --
--- TOC entry 2618 (class 0 OID 0)
--- Dependencies: 277
--- Name: egrid_build_assoc_triple_users_locs_wcs; Type: ACL; Schema: tools; Owner: ark_admin
---
-
-REVOKE ALL ON TABLE egrid_build_assoc_triple_users_locs_wcs FROM PUBLIC;
-REVOKE ALL ON TABLE egrid_build_assoc_triple_users_locs_wcs FROM ark_admin;
-GRANT ALL ON TABLE egrid_build_assoc_triple_users_locs_wcs TO ark_admin;
-GRANT SELECT ON TABLE egrid_build_assoc_triple_users_locs_wcs TO web_users;
-
-
---
--- TOC entry 2619 (class 0 OID 0)
+-- TOC entry 2647 (class 0 OID 0)
 -- Dependencies: 271
 -- Name: egrid_build_assoc_users_and_entities; Type: ACL; Schema: tools; Owner: ark_admin
 --
@@ -4932,7 +5358,7 @@ GRANT SELECT ON TABLE egrid_build_assoc_users_and_entities TO web_users;
 
 
 --
--- TOC entry 2620 (class 0 OID 0)
+-- TOC entry 2648 (class 0 OID 0)
 -- Dependencies: 262
 -- Name: egrid_list_locations_add_new; Type: ACL; Schema: tools; Owner: ark_admin
 --
@@ -4944,7 +5370,7 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE egrid_list_locations_add_new TO web_u
 
 
 --
--- TOC entry 2621 (class 0 OID 0)
+-- TOC entry 2649 (class 0 OID 0)
 -- Dependencies: 264
 -- Name: egrid_list_locations_edit_delete; Type: ACL; Schema: tools; Owner: ark_admin
 --
@@ -4956,7 +5382,7 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE egrid_list_locations_edit_delete TO w
 
 
 --
--- TOC entry 2622 (class 0 OID 0)
+-- TOC entry 2650 (class 0 OID 0)
 -- Dependencies: 261
 -- Name: egrid_list_ownerentities_add_new; Type: ACL; Schema: tools; Owner: ark_admin
 --
@@ -4968,7 +5394,7 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE egrid_list_ownerentities_add_new TO w
 
 
 --
--- TOC entry 2623 (class 0 OID 0)
+-- TOC entry 2651 (class 0 OID 0)
 -- Dependencies: 263
 -- Name: egrid_list_ownerentities_edit_delete; Type: ACL; Schema: tools; Owner: ark_admin
 --
@@ -4980,7 +5406,7 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE egrid_list_ownerentities_edit_delete 
 
 
 --
--- TOC entry 2624 (class 0 OID 0)
+-- TOC entry 2652 (class 0 OID 0)
 -- Dependencies: 266
 -- Name: egrid_list_water_colors_add_new; Type: ACL; Schema: tools; Owner: ark_admin
 --
@@ -4992,7 +5418,7 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE egrid_list_water_colors_add_new TO we
 
 
 --
--- TOC entry 2625 (class 0 OID 0)
+-- TOC entry 2653 (class 0 OID 0)
 -- Dependencies: 265
 -- Name: egrid_list_water_colors_edit_delete; Type: ACL; Schema: tools; Owner: ark_admin
 --
@@ -5004,7 +5430,7 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE egrid_list_water_colors_edit_delete T
 
 
 --
--- TOC entry 2626 (class 0 OID 0)
+-- TOC entry 2654 (class 0 OID 0)
 -- Dependencies: 274
 -- Name: fetchit_landing_selected_loc_for_user_wc_triple_assoc; Type: ACL; Schema: tools; Owner: ark_admin
 --
@@ -5015,10 +5441,46 @@ GRANT ALL ON TABLE fetchit_landing_selected_loc_for_user_wc_triple_assoc TO ark_
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE fetchit_landing_selected_loc_for_user_wc_triple_assoc TO web_users;
 
 
+--
+-- TOC entry 2655 (class 0 OID 0)
+-- Dependencies: 280
+-- Name: fetchit_landing_selected_wc_for_user_loc_triple_assoc; Type: ACL; Schema: tools; Owner: ark_admin
+--
+
+REVOKE ALL ON TABLE fetchit_landing_selected_wc_for_user_loc_triple_assoc FROM PUBLIC;
+REVOKE ALL ON TABLE fetchit_landing_selected_wc_for_user_loc_triple_assoc FROM ark_admin;
+GRANT ALL ON TABLE fetchit_landing_selected_wc_for_user_loc_triple_assoc TO ark_admin;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE fetchit_landing_selected_wc_for_user_loc_triple_assoc TO web_users;
+
+
+--
+-- TOC entry 2656 (class 0 OID 0)
+-- Dependencies: 279
+-- Name: table_display_build_assoc_triple_users_locs_wcs_prep; Type: ACL; Schema: tools; Owner: ark_admin
+--
+
+REVOKE ALL ON TABLE table_display_build_assoc_triple_users_locs_wcs_prep FROM PUBLIC;
+REVOKE ALL ON TABLE table_display_build_assoc_triple_users_locs_wcs_prep FROM ark_admin;
+GRANT ALL ON TABLE table_display_build_assoc_triple_users_locs_wcs_prep TO ark_admin;
+GRANT SELECT ON TABLE table_display_build_assoc_triple_users_locs_wcs_prep TO web_users;
+
+
+--
+-- TOC entry 2657 (class 0 OID 0)
+-- Dependencies: 281
+-- Name: table_display_build_assoc_triple_users_locs_wcs; Type: ACL; Schema: tools; Owner: ark_admin
+--
+
+REVOKE ALL ON TABLE table_display_build_assoc_triple_users_locs_wcs FROM PUBLIC;
+REVOKE ALL ON TABLE table_display_build_assoc_triple_users_locs_wcs FROM ark_admin;
+GRANT ALL ON TABLE table_display_build_assoc_triple_users_locs_wcs TO ark_admin;
+GRANT SELECT ON TABLE table_display_build_assoc_triple_users_locs_wcs TO web_users;
+
+
 SET search_path = web, pg_catalog;
 
 --
--- TOC entry 2627 (class 0 OID 0)
+-- TOC entry 2658 (class 0 OID 0)
 -- Dependencies: 260
 -- Name: assoc_request_to_landing_tables_view; Type: ACL; Schema: web; Owner: ark_admin
 --
@@ -5030,7 +5492,7 @@ GRANT SELECT ON TABLE assoc_request_to_landing_tables_view TO web_users;
 
 
 --
--- TOC entry 2628 (class 0 OID 0)
+-- TOC entry 2659 (class 0 OID 0)
 -- Dependencies: 227
 -- Name: exchange_from_locs_dropdown; Type: ACL; Schema: web; Owner: ark_admin
 --
@@ -5042,7 +5504,7 @@ GRANT SELECT ON TABLE exchange_from_locs_dropdown TO web_users;
 
 
 --
--- TOC entry 2629 (class 0 OID 0)
+-- TOC entry 2660 (class 0 OID 0)
 -- Dependencies: 237
 -- Name: exchange_from_loctype_dropdown; Type: ACL; Schema: web; Owner: ark_admin
 --
@@ -5054,7 +5516,7 @@ GRANT SELECT ON TABLE exchange_from_loctype_dropdown TO web_users;
 
 
 --
--- TOC entry 2630 (class 0 OID 0)
+-- TOC entry 2661 (class 0 OID 0)
 -- Dependencies: 233
 -- Name: exchange_from_owners_dropdown; Type: ACL; Schema: web; Owner: ark_admin
 --
@@ -5066,7 +5528,7 @@ GRANT SELECT ON TABLE exchange_from_owners_dropdown TO web_users;
 
 
 --
--- TOC entry 2631 (class 0 OID 0)
+-- TOC entry 2662 (class 0 OID 0)
 -- Dependencies: 243
 -- Name: exchange_from_wc_dropdown; Type: ACL; Schema: web; Owner: ark_admin
 --
@@ -5078,7 +5540,7 @@ GRANT SELECT ON TABLE exchange_from_wc_dropdown TO web_users;
 
 
 --
--- TOC entry 2632 (class 0 OID 0)
+-- TOC entry 2663 (class 0 OID 0)
 -- Dependencies: 226
 -- Name: exchange_to_locs_dropdown; Type: ACL; Schema: web; Owner: ark_admin
 --
@@ -5090,7 +5552,7 @@ GRANT SELECT ON TABLE exchange_to_locs_dropdown TO web_users;
 
 
 --
--- TOC entry 2633 (class 0 OID 0)
+-- TOC entry 2664 (class 0 OID 0)
 -- Dependencies: 236
 -- Name: exchange_to_loctype_dropdown; Type: ACL; Schema: web; Owner: ark_admin
 --
@@ -5102,7 +5564,7 @@ GRANT SELECT ON TABLE exchange_to_loctype_dropdown TO web_users;
 
 
 --
--- TOC entry 2634 (class 0 OID 0)
+-- TOC entry 2665 (class 0 OID 0)
 -- Dependencies: 232
 -- Name: exchange_to_owners_dropdown; Type: ACL; Schema: web; Owner: ark_admin
 --
@@ -5114,7 +5576,7 @@ GRANT SELECT ON TABLE exchange_to_owners_dropdown TO web_users;
 
 
 --
--- TOC entry 2635 (class 0 OID 0)
+-- TOC entry 2666 (class 0 OID 0)
 -- Dependencies: 244
 -- Name: exchange_to_wc_dropdown; Type: ACL; Schema: web; Owner: ark_admin
 --
@@ -5126,43 +5588,43 @@ GRANT SELECT ON TABLE exchange_to_wc_dropdown TO web_users;
 
 
 --
--- TOC entry 2649 (class 0 OID 0)
+-- TOC entry 2680 (class 0 OID 0)
 -- Dependencies: 230
--- Name: landing_form_1; Type: ACL; Schema: web; Owner: ark_admin
+-- Name: landing_form1; Type: ACL; Schema: web; Owner: ark_admin
 --
 
-REVOKE ALL ON TABLE landing_form_1 FROM PUBLIC;
-REVOKE ALL ON TABLE landing_form_1 FROM ark_admin;
-GRANT ALL ON TABLE landing_form_1 TO ark_admin;
-GRANT SELECT,INSERT,UPDATE ON TABLE landing_form_1 TO web_users;
+REVOKE ALL ON TABLE landing_form1 FROM PUBLIC;
+REVOKE ALL ON TABLE landing_form1 FROM ark_admin;
+GRANT ALL ON TABLE landing_form1 TO ark_admin;
+GRANT SELECT,INSERT,UPDATE ON TABLE landing_form1 TO web_users;
 
 
 --
--- TOC entry 2650 (class 0 OID 0)
+-- TOC entry 2681 (class 0 OID 0)
 -- Dependencies: 242
--- Name: landing_form_1_json; Type: ACL; Schema: web; Owner: ark_admin
+-- Name: landing_form1_json; Type: ACL; Schema: web; Owner: ark_admin
 --
 
-REVOKE ALL ON TABLE landing_form_1_json FROM PUBLIC;
-REVOKE ALL ON TABLE landing_form_1_json FROM ark_admin;
-GRANT ALL ON TABLE landing_form_1_json TO ark_admin;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE landing_form_1_json TO web_users;
+REVOKE ALL ON TABLE landing_form1_json FROM PUBLIC;
+REVOKE ALL ON TABLE landing_form1_json FROM ark_admin;
+GRANT ALL ON TABLE landing_form1_json TO ark_admin;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE landing_form1_json TO web_users;
 
 
 --
--- TOC entry 2652 (class 0 OID 0)
+-- TOC entry 2683 (class 0 OID 0)
 -- Dependencies: 229
--- Name: landing_form_1_landing_ndx_seq; Type: ACL; Schema: web; Owner: ark_admin
+-- Name: landing_form1_landing_ndx_seq; Type: ACL; Schema: web; Owner: ark_admin
 --
 
-REVOKE ALL ON SEQUENCE landing_form_1_landing_ndx_seq FROM PUBLIC;
-REVOKE ALL ON SEQUENCE landing_form_1_landing_ndx_seq FROM ark_admin;
-GRANT ALL ON SEQUENCE landing_form_1_landing_ndx_seq TO ark_admin;
-GRANT ALL ON SEQUENCE landing_form_1_landing_ndx_seq TO web_users;
+REVOKE ALL ON SEQUENCE landing_form1_landing_ndx_seq FROM PUBLIC;
+REVOKE ALL ON SEQUENCE landing_form1_landing_ndx_seq FROM ark_admin;
+GRANT ALL ON SEQUENCE landing_form1_landing_ndx_seq TO ark_admin;
+GRANT ALL ON SEQUENCE landing_form1_landing_ndx_seq TO web_users;
 
 
 --
--- TOC entry 2656 (class 0 OID 0)
+-- TOC entry 2687 (class 0 OID 0)
 -- Dependencies: 276
 -- Name: landing_request_cancellation; Type: ACL; Schema: web; Owner: ark_admin
 --
@@ -5174,7 +5636,7 @@ GRANT SELECT,INSERT,UPDATE ON TABLE landing_request_cancellation TO web_users;
 
 
 --
--- TOC entry 2676 (class 0 OID 0)
+-- TOC entry 2707 (class 0 OID 0)
 -- Dependencies: 239
 -- Name: landing_request_exchange; Type: ACL; Schema: web; Owner: ark_admin
 --
@@ -5186,7 +5648,7 @@ GRANT SELECT,INSERT,UPDATE ON TABLE landing_request_exchange TO web_users;
 
 
 --
--- TOC entry 2677 (class 0 OID 0)
+-- TOC entry 2708 (class 0 OID 0)
 -- Dependencies: 256
 -- Name: landing_request_exchange_json; Type: ACL; Schema: web; Owner: ark_admin
 --
@@ -5198,7 +5660,7 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE landing_request_exchange_json TO web_
 
 
 --
--- TOC entry 2678 (class 0 OID 0)
+-- TOC entry 2709 (class 0 OID 0)
 -- Dependencies: 273
 -- Name: landing_request_exchange_secondary; Type: ACL; Schema: web; Owner: ark_admin
 --
@@ -5210,7 +5672,7 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE landing_request_exchange_secondary TO
 
 
 --
--- TOC entry 2679 (class 0 OID 0)
+-- TOC entry 2710 (class 0 OID 0)
 -- Dependencies: 275
 -- Name: landing_request_exchange_secondary_json; Type: ACL; Schema: web; Owner: ark_admin
 --
@@ -5222,7 +5684,7 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE landing_request_exchange_secondary_js
 
 
 --
--- TOC entry 2692 (class 0 OID 0)
+-- TOC entry 2723 (class 0 OID 0)
 -- Dependencies: 231
 -- Name: landing_request_reservoir; Type: ACL; Schema: web; Owner: ark_admin
 --
@@ -5234,7 +5696,7 @@ GRANT SELECT,INSERT,UPDATE ON TABLE landing_request_reservoir TO web_users;
 
 
 --
--- TOC entry 2693 (class 0 OID 0)
+-- TOC entry 2724 (class 0 OID 0)
 -- Dependencies: 255
 -- Name: landing_request_reservoir_json; Type: ACL; Schema: web; Owner: ark_admin
 --
@@ -5246,7 +5708,7 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE landing_request_reservoir_json TO web
 
 
 --
--- TOC entry 2694 (class 0 OID 0)
+-- TOC entry 2725 (class 0 OID 0)
 -- Dependencies: 240
 -- Name: list_users_and_owners_view; Type: ACL; Schema: web; Owner: ark_admin
 --
@@ -5258,7 +5720,7 @@ GRANT SELECT ON TABLE list_users_and_owners_view TO web_users;
 
 
 --
--- TOC entry 2695 (class 0 OID 0)
+-- TOC entry 2726 (class 0 OID 0)
 -- Dependencies: 248
 -- Name: list_users_view; Type: ACL; Schema: web; Owner: ark_admin
 --
@@ -5270,7 +5732,7 @@ GRANT SELECT ON TABLE list_users_view TO web_users;
 
 
 --
--- TOC entry 2696 (class 0 OID 0)
+-- TOC entry 2727 (class 0 OID 0)
 -- Dependencies: 234
 -- Name: request_type_dropdown; Type: ACL; Schema: web; Owner: ark_admin
 --
@@ -5282,7 +5744,7 @@ GRANT SELECT ON TABLE request_type_dropdown TO web_users;
 
 
 --
--- TOC entry 2697 (class 0 OID 0)
+-- TOC entry 2728 (class 0 OID 0)
 -- Dependencies: 235
 -- Name: reservoir_release_loctype_dropdown; Type: ACL; Schema: web; Owner: ark_admin
 --
@@ -5294,7 +5756,7 @@ GRANT SELECT ON TABLE reservoir_release_loctype_dropdown TO web_users;
 
 
 --
--- TOC entry 2698 (class 0 OID 0)
+-- TOC entry 2729 (class 0 OID 0)
 -- Dependencies: 225
 -- Name: reservoir_release_res_dropdown; Type: ACL; Schema: web; Owner: ark_admin
 --
@@ -5306,7 +5768,7 @@ GRANT SELECT ON TABLE reservoir_release_res_dropdown TO web_users;
 
 
 --
--- TOC entry 2699 (class 0 OID 0)
+-- TOC entry 2730 (class 0 OID 0)
 -- Dependencies: 224
 -- Name: reservoir_release_wc_dropdown; Type: ACL; Schema: web; Owner: ark_admin
 --
@@ -5318,7 +5780,7 @@ GRANT SELECT ON TABLE reservoir_release_wc_dropdown TO web_users;
 
 
 --
--- TOC entry 2700 (class 0 OID 0)
+-- TOC entry 2731 (class 0 OID 0)
 -- Dependencies: 238
 -- Name: units_dropdown; Type: ACL; Schema: web; Owner: ark_admin
 --
@@ -5329,7 +5791,7 @@ GRANT ALL ON TABLE units_dropdown TO ark_admin;
 GRANT SELECT ON TABLE units_dropdown TO web_users;
 
 
--- Completed on 2018-03-26 08:31:27
+-- Completed on 2018-03-27 20:43:57
 
 --
 -- PostgreSQL database dump complete
